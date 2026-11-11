@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "SURE Walk Dispatch",
+  "version": "1.0.0",
+  "description": "Dispatch SURE Walk rides from the Excel rides workbook: assign crews, at, picked, cancel \u2014 with GroupMe ride posts.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsSlBW64NsdZY2DZOq/lCwIMNs2/kw481ESd/xmoY0DrbQzAmuUE5riaidWm+W5+EoS9ukuyjK3Bfh6U3ia2GMy7Rfb9aW0/tyGMjLwfFPfbDBotbOQJ/AfI38Q+lRNvz81E/JpnaN4l1O4pZVpEqBYtuBH1Gm/lnETj5j22n/XRHttkm3pmNNKUfo0irQlCZkDPUFLT5jGmcBRLqPyWur/Rt2fI3RFSbsCU2VAbNDCGaWNOaBf91pAqWgcLdOVjAroey7Ifvbk/dANLgrEEURdancuH9ZW8o9EmarI9zL+1CSaI/gNsGk5nyMCWfD49mdXZ+ACDGqPKEME1Zk/i8VwIDAQAB",
+  "action": {
+    "default_title": "SURE Walk Dispatch",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "identity",
+    "sidePanel",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://graph.microsoft.com/*",
+    "https://login.microsoftonline.com/*",
+    "https://api.groupme.com/*"
+  ]
+}

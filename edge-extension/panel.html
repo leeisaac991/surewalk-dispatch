@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURE Walk Dispatch</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">SURE Walk</div>
+  <span id="wait" class="chip" hidden></span>
+  <span class="grow"></span>
+  <button id="refreshBtn" class="icon" title="Refresh">↻</button>
+  <button id="settingsBtn" class="icon" title="Settings">⚙</button>
+</header>
+<div id="statusLine" class="statusline"></div>
+
+<main id="main">
+  <div id="setupNote" class="card note" hidden></div>
+
+  <section class="row wrap" id="tonightBar" hidden>
+    <span class="label">Picked color</span>
+    <button id="colorBtn" class="swatchbtn"><span id="swA" class="sw"></span><span id="swB" class="sw"></span><span id="colorTxt">Set</span></button>
+    <span class="grow"></span>
+    <span id="shiftChips" class="row"></span>
+  </section>
+  <div id="colorPick" class="card" hidden>
+    <div class="label">Tonight's picked color (A shift; B shift gets its pastel)</div>
+    <div id="swatches" class="row wrap"></div>
+  </div>
+
+  <section>
+    <h2>Pending <span id="pendingCount" class="count"></span></h2>
+    <div id="pending" class="list"></div>
+  </section>
+
+  <section>
+    <h2>Crews <span class="grow"></span><button id="addCrewBtn" class="link">+ Add crew</button></h2>
+    <div id="crews"></div>
+  </section>
+</main>
+
+<div id="assignBar" class="assignbar" hidden>
+  <div class="row"><b id="selCount"></b><span class="grow"></span><button id="clearSel" class="link">Clear</button></div>
+  <div class="row">
+    <select id="crewSel" class="grow"></select>
+    <select id="locSel"></select>
+    <select id="vanSel"></select>
+  </div>
+  <button id="assignBtn" class="primary">Assign</button>
+</div>
+
+<div id="toast" class="toast" hidden><span id="toastText"></span><button id="undoBtn" class="link" hidden>Undo</button></div>
+
+<!-- dialogs -->
+<div id="dlg" class="dlg" hidden>
+  <div class="dlgbox">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div class="row end"><button id="dlgCancel">Cancel</button><button id="dlgOk" class="primary">OK</button></div>
+  </div>
+</div>
+
+<section id="settings" class="settings" hidden>
+  <header class="top"><b>Settings</b><span class="grow"></span><button id="closeSettings" class="icon">✕</button></header>
+  <div class="settingsbody">
+    <div class="card">
+      <h3>You</h3>
+      <label>Your name for the Dispatch column <input id="sDispatcher" placeholder="I. Lee"></label>
+    </div>
+    <div class="card" id="msCard">
+      <h3>Microsoft sign-in</h3>
+      <label>App (client) ID <input id="sClientId" placeholder="00000000-0000-0000-0000-000000000000"></label>
+      <label>Tenant <input id="sTenant" placeholder="organizations"></label>
+      <p class="hint">Redirect URI to register: <code id="redirectUri"></code></p>
+      <div class="row"><button id="signInBtn" class="primary">Sign in</button><button id="signOutBtn">Sign out</button><span id="msWho" class="hint"></span></div>
+    </div>
+    <div class="card">
+      <h3>Rides workbook</h3>
+      <label id="fileLinkRow">Excel file link (Share ▸ Copy link) <input id="sFile" placeholder="https://utexas-my.sharepoint.com/…"></label>
+      <label>Tab <input id="sSheet" placeholder="first tab"></label>
+      <div class="row"><button id="openFileBtn" class="primary">Connect</button><span id="fileWho" class="hint"></span></div>
+    </div>
+    <div class="card">
+      <h3>GroupMe</h3>
+      <label>Access token <input id="sGmToken" type="password" placeholder="X-Access-Token"></label>
+      <p class="hint">web.groupme.com ▸ F12 ▸ Network ▸ any api.groupme.com request ▸ X-Access-Token.</p>
+      <div class="row"><button id="gmCheckBtn">Check &amp; load chats</button><span id="gmWho" class="hint"></span></div>
+      <label>Dispatch chat <select id="sGmGroup"><option value="">—</option></select></label>
+      <label class="switch"><input id="sAutoPost" type="checkbox" checked> Post ride messages automatically (assign, take off, cancel)</label>
+    </div>
+    <div class="row end"><button id="openTab" class="link">Open in a tab</button><span class="grow"></span><button id="saveSettings" class="primary">Save</button></div>
+  </div>
+</section>
+
+<script src="lib/places.js"></script>
+<script src="lib/rules.js"></script>
+<script src="lib/graph.js"></script>
+<script src="lib/groupme.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

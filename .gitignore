@@ -1,0 +1,6 @@
+excel-addin/dist/
+excel-addin/dist.new/
+excel-addin/scriptlab/preview.html
+edge-extension/test/sheet.json
+edge-extension/test/*.png
+node_modules/
