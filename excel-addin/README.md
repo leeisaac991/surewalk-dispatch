@@ -9,11 +9,11 @@ Two ways to run it:
 ## Option A — Script Lab (easiest: nothing to host)
 Script Lab is Microsoft's free add-in for running your own code in Excel.
 
-1. Build the snippet: `./scriptlab.sh` → `scriptlab/SURE-Walk-Dispatch.yaml`.
+1. The snippet is published as a public gist: https://gist.github.com/leeisaac991/797e865d8e0bc875907aca9f2c645a62
+   (to rebuild it after a change: `./scriptlab.sh` → `scriptlab/SURE-Walk-Dispatch.yaml`, then update the gist).
 2. In Excel on the web, open the rides workbook ▸ **Home ▸ Add-ins** ▸ search **Script Lab** ▸ **Add**.
    (If UT blocks store add-ins, it won't show up; use the Edge extension instead.)
-3. **Script Lab tab ▸ Code** ▸ the ☰ menu ▸ **Import** ▸ paste the whole contents of `SURE-Walk-Dispatch.yaml`
-   ▸ **Import**.
+3. **Script Lab tab ▸ Code** ▸ the ☰ menu ▸ **Import** ▸ paste the gist link (or the whole YAML) ▸ **Import**.
 4. **Script Lab tab ▸ Run** opens the panel beside the sheet.
 5. **⚙ Settings**: your name, your GroupMe token (**Check & load chats**, then pick the dispatch chat), and the rides
    tab if it isn't the first tab. **Save**.
