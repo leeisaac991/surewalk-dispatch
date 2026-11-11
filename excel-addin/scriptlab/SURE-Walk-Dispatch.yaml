@@ -878,7 +878,7 @@ script:
       function buildNight({ rows, rosterRows, toggles, extraCrews, chosenColors, nowMs }) {
         nowMs = nowMs == null ? Date.now() : nowMs;
         const night = nightKey(nowMs), cutoff = nowMs - LOOKBACK_HOURS * 3600e3, editCutoff = nowMs - EDIT_WINDOW_MIN * 60e3;
-        const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} };
+        const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} }, picks = [];
         rows.forEach(({ row, text, fill }) => {
           const ts = parseTs(text[COL.TS - 1]);
           if (ts == null || ts < cutoff) return;
@@ -913,6 +913,8 @@ script:
           const w = waitMinutes(r.call, r.arrived);
           if (w != null && tonight) waits.push({ row, wait: w });
           if (r.driver) seen[crewKey(r)] = { driver: r.driver, nav: r.nav, van: r.van, loc: r.loc };
+          // tonight's pickups, for "empty since" (the crew's latest pickup)
+          if (r.state === 'picked' && r.driver && tonight && arrAgo != null) picks.push({ driver: r.driver, nav: r.nav, ms: nowMs - arrAgo * 60e3 });
           if (ts >= editCutoff || (r.state !== 'picked' && tonight)) rides.push(r);
         });
 
@@ -924,7 +926,13 @@ script:
           add(Object.assign({ shift: s.name }, c, c.move && t >= c.move.at ? { van: c.move.van, vehicle: c.move.vehicle, cap: c.move.cap, phone: c.move.phone || c.phone } : {}))));
         (extraCrews || []).forEach(c => add(Object.assign({ shift: 'Added' }, c)));
         rides.filter(r => r.state === 'assigned').forEach(r => add(Object.assign({ shift: 'On a ride' }, seen[crewKey(r)] || { driver: r.driver, nav: r.nav, van: r.van })));
-        crews.forEach(c => { c.riders = rides.filter(r => r.state === 'assigned' && samePair(r, c)); });
+        crews.forEach(c => {
+          c.riders = rides.filter(r => r.state === 'assigned' && samePair(r, c));
+          c.empty = !c.riders.length;
+          c.lastPickMs = Math.max(0, ...picks.filter(p => samePair(p, c)).map(p => p.ms));
+        });
+        // Empty crews first — the one empty longest at the top (no pickup yet tonight counts as longest) — then busy crews.
+        crews.sort((a, b) => (b.empty - a.empty) || (a.empty ? a.lastPickMs - b.lastPickMs : 0));
 
         const top = m => Object.keys(m).sort((a, b) => m[b] - m[a])[0] || null;
         const det = { A: top(colorCounts.A), B: top(colorCounts.B) };
@@ -1276,6 +1284,11 @@ script:
         // wait + colors + shifts
         $('wait').hidden = night.wait == null;
         $('wait').textContent = night.wait == null ? '' : `~${night.wait} min wait`;
+        const nEmpty = night.crews.filter(c => c.empty).length;
+        $('emptyChip').hidden = !night.crews.length;
+        $('emptyChip').textContent = nEmpty ? `${nEmpty} empty` : 'none empty';
+        $('emptyChip').classList.toggle('none', !nEmpty);
+        $('crewSummary').textContent = night.crews.length ? `${nEmpty} empty · ${night.crews.length - nEmpty} busy` : '';
         $('tonightBar').hidden = false;
         $('swA').style.background = night.colors.A || 'transparent';
         $('swB').style.background = night.colors.B || 'transparent';
@@ -1301,10 +1314,15 @@ script:
             if (g) g.rides.push(r); else groups.push({ key: (r.pickupName || r.pickup).toLowerCase(), name: r.pickupName || r.pickup, rides: [r] });
           });
           const cap = Number(c.cap) || 0;
-          return `<div class="crew">
-            <div class="crewhead"><span class="dot ${c.riders.length ? 'busy' : ''}"></span>
+          const mins = c.lastPickMs ? Math.max(0, Math.round((Date.now() - c.lastPickMs) / 60e3)) : null;
+          const since = mins == null ? 'no pickups yet tonight' : `last pickup ${R.fmtTime(c.lastPickMs)} · ${mins} min ago`;
+          const badge = c.empty ? '<span class="state empty">EMPTY</span>'
+            : `<span class="state busy">${c.riders.length} to pick up</span>`;
+          return `<div class="crew ${c.empty ? 'is-empty' : 'is-busy'}">
+            <div class="crewhead">${badge}
               <b>${esc(R.crewLabel(c))}</b>
-              <span class="meta">${esc(c.vehicle || c.van || '')}${cap ? ` · ${c.riders.length}/${cap}` : c.riders.length ? ` · ${c.riders.length}` : ''}${c.shift ? ' · ' + esc(c.shift) : ''}</span></div>
+              <span class="meta">${esc(c.vehicle || c.van || '')}${cap ? ` · ${c.riders.length}/${cap}` : ''}${c.shift ? ' · ' + esc(c.shift) : ''}</span></div>
+            ${c.empty ? `<div class="emptyline">Ready for a ride · ${esc(since)}</div>` : ''}
             ${groups.map(g => {
               const ids = g.rides.map(r => r.id).join(',');
               const arrived = g.rides.every(r => r.arrived);
@@ -1330,7 +1348,7 @@ script:
         $('selCount').textContent = `${rs.length} selected`;
         const prev = $('crewSel').value;
         $('crewSel').innerHTML = '<option value="">Choose a crew…</option>' + night.crews.map(c =>
-          `<option value="${esc(c.key)}">${esc(R.crewLabel(c))} — ${c.riders.length}${c.cap ? '/' + c.cap : ''} · ${esc(c.van || '')}</option>`).join('');
+          `<option value="${esc(c.key)}">${c.empty ? '🟢 EMPTY — ' : `🟠 ${c.riders.length}${c.cap ? '/' + c.cap : ''} — `}${esc(R.crewLabel(c))} · ${esc(c.van || '')}</option>`).join('');
         if (night.crews.some(c => c.key === prev)) $('crewSel').value = prev;
         if (!$('locSel').options.length) $('locSel').innerHTML = ['Auto'].concat(R.LOCATIONS).map(x => `<option>${x}</option>`).join('');
         const crew = night.crews.find(c => c.key === $('crewSel').value);
@@ -1671,6 +1689,7 @@ script:
       $('undoBtn').addEventListener('click', undo);
       $('colorBtn').addEventListener('click', () => { renderSwatches(); $('colorPick').hidden = !$('colorPick').hidden; });
       $('addCrewBtn').addEventListener('click', addCrew);
+      $('emptyChip').addEventListener('click', () => $('crewsSection').scrollIntoView({ behavior: 'smooth' }));
       $('settingsBtn').addEventListener('click', () => { fillSettings(); $('settings').hidden = false; });
       $('closeSettings').addEventListener('click', () => { $('settings').hidden = true; });
       $('saveSettings').addEventListener('click', async () => { await saveSettings(); $('settings').hidden = true; connect(); });
@@ -1714,6 +1733,7 @@ template:
     <header class="top">
       <div class="brand">SURE Walk</div>
       <span id="wait" class="chip" hidden></span>
+      <button id="emptyChip" class="emptychip" hidden title="Go to crews"></button>
       <span class="grow"></span>
       <button id="refreshBtn" class="icon" title="Refresh">↻</button>
       <button id="settingsBtn" class="icon" title="Settings">⚙</button>
@@ -1739,8 +1759,8 @@ template:
         <div id="pending" class="list"></div>
       </section>
 
-      <section>
-        <h2>Crews <span class="grow"></span><button id="addCrewBtn" class="link">+ Add crew</button></h2>
+      <section id="crewsSection">
+        <h2>Crews <span id="crewSummary" class="crewsummary"></span><span class="grow"></span><button id="addCrewBtn" class="link">+ Add crew</button></h2>
         <div id="crews"></div>
       </section>
     </main>
@@ -1802,12 +1822,12 @@ style:
   content: |
     :root {
       --bg: #f4f4f6; --card: #fff; --text: #1c1c1e; --muted: #6e6e73; --line: #e2e2e6;
-      --accent: #bf5700; --accent-bg: #fbeee4; --ok: #1f8a3b; --warn: #b25000; --bad: #c62828; --bad-bg: #fdecec;
+      --accent: #bf5700; --accent-bg: #fbeee4; --ok: #1f8a3b; --ok-bg: #e8f6ec; --warn: #b25000; --warn-bg: #fff1e0; --bad: #c62828; --bad-bg: #fdecec;
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root { --bg: #121214; --card: #1e1e21; --text: #f2f2f4; --muted: #9a9aa0; --line: #2e2e33;
-        --accent: #e0752a; --accent-bg: #3a2516; --ok: #44c767; --warn: #f0a050; --bad: #ff6b6b; --bad-bg: #3a1c1c; color-scheme: dark; }
+        --accent: #e0752a; --accent-bg: #3a2516; --ok: #44c767; --ok-bg: #16301e; --warn: #f0a050; --warn-bg: #3a2a16; --bad: #ff6b6b; --bad-bg: #3a1c1c; color-scheme: dark; }
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
@@ -1854,8 +1874,16 @@ style:
     .crew { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
     .crewhead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
     .crewhead b { flex: 1; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
-    .dot.busy { background: var(--warn); }
+    /* empty crews: impossible to miss */
+    .crew.is-empty { border: 2px solid var(--ok); background: var(--ok-bg); }
+    .crew.is-empty .crewhead b { font-size: 15px; }
+    .state { flex: none; font-size: 11px; font-weight: 800; letter-spacing: .04em; border-radius: 6px; padding: 3px 8px; }
+    .state.empty { background: var(--ok); color: #fff; font-size: 13px; padding: 4px 10px; }
+    .state.busy { background: var(--warn-bg); color: var(--warn); }
+    .emptyline { padding: 0 10px 9px; font-size: 12px; font-weight: 600; color: var(--ok); }
+    .emptychip { border: 0; border-radius: 99px; padding: 2px 10px; font-size: 12px; font-weight: 800; background: var(--ok); color: #fff; }
+    .emptychip.none { background: var(--line); color: var(--muted); }
+    .crewsummary { text-transform: none; letter-spacing: 0; font-weight: 600; }
     .group { border-top: 1px solid var(--line); padding: 8px 10px; }
     .group .row.btns { margin-top: 6px; flex-wrap: wrap; }
     .rider { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }

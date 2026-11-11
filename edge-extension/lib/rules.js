@@ -279,7 +279,7 @@ const R = (() => {
   function buildNight({ rows, rosterRows, toggles, extraCrews, chosenColors, nowMs }) {
     nowMs = nowMs == null ? Date.now() : nowMs;
     const night = nightKey(nowMs), cutoff = nowMs - LOOKBACK_HOURS * 3600e3, editCutoff = nowMs - EDIT_WINDOW_MIN * 60e3;
-    const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} };
+    const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} }, picks = [];
     rows.forEach(({ row, text, fill }) => {
       const ts = parseTs(text[COL.TS - 1]);
       if (ts == null || ts < cutoff) return;
@@ -314,6 +314,8 @@ const R = (() => {
       const w = waitMinutes(r.call, r.arrived);
       if (w != null && tonight) waits.push({ row, wait: w });
       if (r.driver) seen[crewKey(r)] = { driver: r.driver, nav: r.nav, van: r.van, loc: r.loc };
+      // tonight's pickups, for "empty since" (the crew's latest pickup)
+      if (r.state === 'picked' && r.driver && tonight && arrAgo != null) picks.push({ driver: r.driver, nav: r.nav, ms: nowMs - arrAgo * 60e3 });
       if (ts >= editCutoff || (r.state !== 'picked' && tonight)) rides.push(r);
     });
 
@@ -325,7 +327,13 @@ const R = (() => {
       add(Object.assign({ shift: s.name }, c, c.move && t >= c.move.at ? { van: c.move.van, vehicle: c.move.vehicle, cap: c.move.cap, phone: c.move.phone || c.phone } : {}))));
     (extraCrews || []).forEach(c => add(Object.assign({ shift: 'Added' }, c)));
     rides.filter(r => r.state === 'assigned').forEach(r => add(Object.assign({ shift: 'On a ride' }, seen[crewKey(r)] || { driver: r.driver, nav: r.nav, van: r.van })));
-    crews.forEach(c => { c.riders = rides.filter(r => r.state === 'assigned' && samePair(r, c)); });
+    crews.forEach(c => {
+      c.riders = rides.filter(r => r.state === 'assigned' && samePair(r, c));
+      c.empty = !c.riders.length;
+      c.lastPickMs = Math.max(0, ...picks.filter(p => samePair(p, c)).map(p => p.ms));
+    });
+    // Empty crews first — the one empty longest at the top (no pickup yet tonight counts as longest) — then busy crews.
+    crews.sort((a, b) => (b.empty - a.empty) || (a.empty ? a.lastPickMs - b.lastPickMs : 0));
 
     const top = m => Object.keys(m).sort((a, b) => m[b] - m[a])[0] || null;
     const det = { A: top(colorCounts.A), B: top(colorCounts.B) };

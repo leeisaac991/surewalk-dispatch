@@ -1,11 +1,11 @@
 :root {
   --bg: #f4f4f6; --card: #fff; --text: #1c1c1e; --muted: #6e6e73; --line: #e2e2e6;
-  --accent: #bf5700; --accent-bg: #fbeee4; --ok: #1f8a3b; --warn: #b25000; --bad: #c62828; --bad-bg: #fdecec;
+  --accent: #bf5700; --accent-bg: #fbeee4; --ok: #1f8a3b; --ok-bg: #e8f6ec; --warn: #b25000; --warn-bg: #fff1e0; --bad: #c62828; --bad-bg: #fdecec;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #121214; --card: #1e1e21; --text: #f2f2f4; --muted: #9a9aa0; --line: #2e2e33;
-    --accent: #e0752a; --accent-bg: #3a2516; --ok: #44c767; --warn: #f0a050; --bad: #ff6b6b; --bad-bg: #3a1c1c; color-scheme: dark; }
+    --accent: #e0752a; --accent-bg: #3a2516; --ok: #44c767; --ok-bg: #16301e; --warn: #f0a050; --warn-bg: #3a2a16; --bad: #ff6b6b; --bad-bg: #3a1c1c; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -52,8 +52,16 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 .crew { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
 .crewhead { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .crewhead b { flex: 1; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
-.dot.busy { background: var(--warn); }
+/* empty crews: impossible to miss */
+.crew.is-empty { border: 2px solid var(--ok); background: var(--ok-bg); }
+.crew.is-empty .crewhead b { font-size: 15px; }
+.state { flex: none; font-size: 11px; font-weight: 800; letter-spacing: .04em; border-radius: 6px; padding: 3px 8px; }
+.state.empty { background: var(--ok); color: #fff; font-size: 13px; padding: 4px 10px; }
+.state.busy { background: var(--warn-bg); color: var(--warn); }
+.emptyline { padding: 0 10px 9px; font-size: 12px; font-weight: 600; color: var(--ok); }
+.emptychip { border: 0; border-radius: 99px; padding: 2px 10px; font-size: 12px; font-weight: 800; background: var(--ok); color: #fff; }
+.emptychip.none { background: var(--line); color: var(--muted); }
+.crewsummary { text-transform: none; letter-spacing: 0; font-weight: 600; }
 .group { border-top: 1px solid var(--line); padding: 8px 10px; }
 .group .row.btns { margin-top: 6px; flex-wrap: wrap; }
 .rider { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }

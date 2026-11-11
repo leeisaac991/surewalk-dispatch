@@ -10,6 +10,7 @@
 <header class="top">
   <div class="brand">SURE Walk</div>
   <span id="wait" class="chip" hidden></span>
+  <button id="emptyChip" class="emptychip" hidden title="Go to crews"></button>
   <span class="grow"></span>
   <button id="refreshBtn" class="icon" title="Refresh">↻</button>
   <button id="settingsBtn" class="icon" title="Settings">⚙</button>
@@ -35,8 +36,8 @@
     <div id="pending" class="list"></div>
   </section>
 
-  <section>
-    <h2>Crews <span class="grow"></span><button id="addCrewBtn" class="link">+ Add crew</button></h2>
+  <section id="crewsSection">
+    <h2>Crews <span id="crewSummary" class="crewsummary"></span><span class="grow"></span><button id="addCrewBtn" class="link">+ Add crew</button></h2>
     <div id="crews"></div>
   </section>
 </main>
