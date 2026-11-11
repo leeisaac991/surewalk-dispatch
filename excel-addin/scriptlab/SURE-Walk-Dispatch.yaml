@@ -605,9 +605,33 @@ script:
     /* exported R */
     const R = (() => {
       const TZ = 'America/Chicago';
-      const COL = { TS: 1, DISPATCH: 2, CALL: 3, ARRIVE: 4, WAIT: 5, EID: 6, LAST: 7, FIRST: 8, PHONE: 9, PICKUP: 10, DROPOFF: 11,
-        ADA: 12, LOC: 13, VAN: 14, DRIVER: 15, NAV: 16, EMAIL: 18, REASON: 22, NOTES: 23 };
-      const LAST_COL = 23;          // A:W
+      // Column numbers (1 = A). Set from the sheet's header row by setLayout(); these defaults are the Excel
+      // "Sure Walk Fall 2026" layout (Microsoft Forms: Id, Start time, Form Submitted, Time Submitted, Dispatcher, …).
+      const COL = { TS: 3, DISPATCH: 5, CALL: 6, ARRIVE: 7, WAIT: 8, EID: 9, LAST: 10, FIRST: 11, PHONE: 12, PICKUP: 13, DROPOFF: 14,
+        ADA: 15, LOC: 16, VAN: 17, DRIVER: 18, NAV: 19, EMAIL: 23, REASON: 24, NOTES: 25 };
+      let LAST_COL = 25;
+      const READ_COLS = 30;         // columns read from the sheet (A:AD); the layout is found inside them
+      const colLetter = n => { let s = ''; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+      const colNumber = s => String(s).toUpperCase().split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+      // Header text -> column. First match wins, so "Form Submitted" beats "Start time" for the timestamp.
+      const HEADERS = [
+        ['TS', /^(form submitted|timestamp|completion time)/], ['DISPATCH', /^dispatch/], ['CALL', /^call time/], ['ARRIVE', /^arrival/],
+        ['WAIT', /^wait/], ['EID', /\beid\b/], ['LAST', /^last name/], ['FIRST', /^first name/], ['PHONE', /^phone/],
+        ['PICKUP', /^pick ?-?up/], ['DROPOFF', /^drop ?-?off/], ['ADA', /disabilit|^ada\b/], ['LOC', /^location$/],
+        ['VAN', /^(van|vehicle)/], ['DRIVER', /^driver$/], ['NAV', /^navigator$/], ['EMAIL', /^email/], ['REASON', /cancel/], ['NOTES', /^notes?$/],
+      ];
+      /** Reads the header row (row 1 text) and points COL at the right columns. Throws if a needed column is missing. */
+      function setLayout(header) {
+        const h = (header || []).map(x => String(x || '').toLowerCase().replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim());
+        const found = {};
+        HEADERS.forEach(([k, re]) => { const i = h.findIndex((x, j) => re.test(x) && !Object.values(found).includes(j + 1)); if (i >= 0) found[k] = i + 1; });
+        const need = ['TS', 'FIRST', 'PHONE', 'PICKUP', 'DROPOFF', 'DRIVER', 'NAV', 'ARRIVE', 'CALL'];
+        const missing = need.filter(k => !found[k]);
+        if (missing.length) throw new Error(`Can't find these columns in row 1: ${missing.join(', ')} — is the rides tab selected?`);
+        Object.assign(COL, found);
+        LAST_COL = Math.max(...Object.values(COL));
+        return Object.assign({}, COL);
+      }
       const EDIT_WINDOW_MIN = 60;   // never write to finished rides submitted longer ago than this
       const DUP_WINDOW_MIN = 40;    // possible-duplicate check looks back this far
       const LOOKBACK_HOURS = 14;    // tonight's rows
@@ -655,7 +679,7 @@ script:
       }
       const hasTime = text => /\d{1,2}:\d{2}/.test(String(text || ''));
       // A ride's id: its timestamp + phone (or first name) — stable even when rows move.
-      const rideIdOf = text => { const ts = parseTs(text[0]); return ts == null ? '' : ts + '|' + (String(text[8] || '').replace(/\D/g, '').slice(-10) || String(text[7] || '').toLowerCase().replace(/[^a-z0-9]/g, '')); };
+      const rideIdOf = text => { const ts = parseTs(text[COL.TS - 1]); return ts == null ? '' : ts + '|' + (String(text[COL.PHONE - 1] || '').replace(/\D/g, '').slice(-10) || String(text[COL.FIRST - 1] || '').toLowerCase().replace(/[^a-z0-9]/g, '')); };
 
       /* ---------- names ---------- */
       const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -708,6 +732,14 @@ script:
       const brightOf = hex => Object.keys(PASTEL_OF).find(b => PASTEL_OF[b] === String(hex).toLowerCase()) || null;
       // A colored row only counts as picked when Arrival (D) is filled too (Forms copies the row above's color).
       const isPickedRow = (kind, arrival) => kind.kind === 'color' && !!String(arrival || '').trim();
+      const PICKED_GUESS_MIN = 30;
+      // "19:07" -> minutes since that clock time (within the last 24 h); null if it isn't a time.
+      function minutesAgo(hhmm, nowMs) {
+        const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '').trim());
+        if (!m) return null;
+        const p = parts(nowMs == null ? Date.now() : nowMs);
+        return ((p.h * 60 + p.mi) - (Number(m[1]) * 60 + Number(m[2])) + 1440) % 1440;
+      }
       const hasReason = v => { const s = String(v == null ? '' : v).trim(); return !!s && s !== '0'; };
 
       /* ---------- roster block below the rides ---------- */
@@ -848,7 +880,7 @@ script:
         const night = nightKey(nowMs), cutoff = nowMs - LOOKBACK_HOURS * 3600e3, editCutoff = nowMs - EDIT_WINDOW_MIN * 60e3;
         const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} };
         rows.forEach(({ row, text, fill }) => {
-          const ts = parseTs(text[0]);
+          const ts = parseTs(text[COL.TS - 1]);
           if (ts == null || ts < cutoff) return;
           const get = c => String(text[c - 1] == null ? '' : text[c - 1]).trim();
           const kind = rowKind(fill), tonight = nightKey(ts) === night;
@@ -863,9 +895,13 @@ script:
             zone: typeof zoneOf_ === 'function' ? zoneOf_(get(COL.DROPOFF)) : '',
             offCampus: typeof offCampusPickup_ === 'function' ? !!offCampusPickup_(get(COL.PICKUP)) : false,
           };
+          // Picked = a colored row with an Arrival time. A row nobody colored counts as picked once its Arrival is
+          // PICKED_GUESS_MIN old (the Excel sheet isn't always colored), so finished rides don't fill up the crews.
+          const arrAgo = minutesAgo(r.arrived, nowMs);
+          const picked = isPickedRow(kind, r.arrived) || (kind.kind === 'none' && r.driver && arrAgo != null && arrAgo >= PICKED_GUESS_MIN);
           r.state = hasReason(r.reason) || kind.kind === 'black' ? 'cancelled' : kind.kind === 'red' ? 'dup'
-            : isPickedRow(kind, r.arrived) ? 'picked' : r.driver ? 'assigned' : 'pending';
-          if (r.state === 'picked' && tonight) { const s = colorCounts[isPastel(kind.color) ? 'B' : 'A']; s[kind.color] = (s[kind.color] || 0) + 1; }
+            : picked ? 'picked' : r.driver ? 'assigned' : 'pending';
+          if (r.state === 'picked' && tonight && kind.kind === 'color') { const s = colorCounts[isPastel(kind.color) ? 'B' : 'A']; s[kind.color] = (s[kind.color] || 0) + 1; }
           if (r.state === 'cancelled' || r.state === 'dup') { if (ts >= editCutoff) rides.push(r); return; }
           // possible duplicate: same route, same name and same phone within 40 min (a suggestion only)
           const same = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -911,7 +947,7 @@ script:
       // fresh: { text: [A..W], fill }
       function assertEditable(fresh, row, nowMs) {
         nowMs = nowMs == null ? Date.now() : nowMs;
-        const ts = parseTs(fresh.text[0]);
+        const ts = parseTs(fresh.text[COL.TS - 1]);
         if (ts == null) throw new Error(`Row ${row} isn't a ride — not editing it.`);
         const kind = rowKind(fresh.fill);
         if (kind.kind === 'black' || kind.kind === 'red') throw new Error(`Row ${row} is marked ${kind.kind === 'red' ? 'duplicate (red)' : 'cancelled (black)'} — not editing it.`);
@@ -946,7 +982,7 @@ script:
       const removedText = (rest, gone, word) => (rest.length ? ['Updated ride!'].concat(byPickup(rest).map(rideLine)) : [])
         .concat([`${word}: ` + gone.map(r => String(r.first || '').trim()).join(', ')]).join('\n');
 
-      return { TZ, COL, LAST_COL, EDIT_WINDOW_MIN, PICK_GAP_MIN, LOCATIONS, VANS, CANCEL_REASONS, DUPLICATE_COLOR, PASTEL_OF,
+      return { TZ, COL, get LAST_COL() { return LAST_COL; }, READ_COLS, colLetter, colNumber, setLayout, EDIT_WINDOW_MIN, PICK_GAP_MIN, LOCATIONS, VANS, CANCEL_REASONS, DUPLICATE_COLOR, PASTEL_OF,
         parts, wallToMs, fmtTime, nightKey, nightMin, parseTs, hasTime, rideIdOf, norm, sameName, samePair, crewKey, crewLabel,
         rowKind, isColored, isPastel, pastelOf, brightOf, hasReason, parseRoster, autoShiftLetters, activeShifts, shadeFor,
         waitMinutes, buildNight, assertEditable, checkAssign, rideLine, byPickup, assignText, removedText };
@@ -982,11 +1018,13 @@ script:
           await ctx.sync();
           const lastRow = used.isNullObject ? 1 : used.rowIndex + used.rowCount;
           const start = Math.max(2, typeof top === 'function' ? top(lastRow) : top);
-          if (lastRow < start) return { lastRow, top: start, text: [] };
-          const rg = ws.getRange(`A${start}:W${lastRow}`);
+          const L = R.colLetter(R.READ_COLS), hd = ws.getRange(`A1:${L}1`);
+          hd.load('text');
+          if (lastRow < start) { await ctx.sync(); return { lastRow, top: start, header: hd.text[0], text: [] }; }
+          const rg = ws.getRange(`A${start}:${L}${lastRow}`);
           rg.load('text');
           await ctx.sync();
-          return { lastRow, top: start, text: rg.text };
+          return { lastRow, top: start, header: hd.text[0], text: rg.text };
         });
       }
       // One color per row, judged like the old panel: 3+ black cells = black, 3+ red = red, else the most common real color.
@@ -999,7 +1037,7 @@ script:
       function readFills(rows) {
         return Excel.run(async ctx => {
           const ws = sheetOf(ctx);
-          const props = rows.map(r => ws.getRange(`A${r}:W${r}`).getCellProperties({ format: { fill: { color: true } } }));
+          const props = rows.map(r => ws.getRange(`A${r}:${R.colLetter(R.LAST_COL)}${r}`).getCellProperties({ format: { fill: { color: true } } }));
           await ctx.sync();
           const out = {};
           rows.forEach((r, i) => { out[r] = rowColor(props[i].value[0].map(p => p.format.fill.color)); });
@@ -1010,7 +1048,7 @@ script:
         return Excel.run(async ctx => {
           const ws = sheetOf(ctx);
           const got = rows.map(r => {
-            const rg = ws.getRange(`A${r}:W${r}`);
+            const rg = ws.getRange(`A${r}:${R.colLetter(R.LAST_COL)}${r}`);
             rg.load('text');
             return { rg, props: rg.getCellProperties({ format: { fill: { color: true }, font: { color: true } } }) };
           });
@@ -1188,17 +1226,20 @@ script:
         loading = true;
         try {
           const t = await G.readText(last => last - SCAN + 1);
+          R.setLayout(t.header); // find each column by its header (row 1)
+          const TS = COL.TS - 1;
           let lastIdx = -1;
-          t.text.forEach((r, i) => { if (R.hasTime(r[0])) lastIdx = i; });
+          t.text.forEach((r, i) => { if (R.hasTime(r[TS])) lastIdx = i; });
           const rows = t.text.slice(0, lastIdx + 1).map((text, i) => ({ row: t.top + i, text }));
-          const rosterRows = t.text.slice(lastIdx + 1);
+          // the roster block under the rides starts in the timestamp column (C in the Excel sheet, A in the old one)
+          const rosterRows = t.text.slice(lastIdx + 1).map(r => r.slice(TS));
           // Row colors: tonight's rows only. Open rides are re-checked every refresh, finished ones every 2 min.
-          const now = Date.now(), need = [], keyOf = r => r.text[0] + '|' + r.text[7] + '|' + r.text[3] + '|' + r.text[21];
+          const now = Date.now(), need = [], keyOf = r => [COL.TS, COL.FIRST, COL.ARRIVE, COL.REASON].map(c => r.text[c - 1]).join('|');
           rows.forEach(r => {
-            const ts = R.parseTs(r.text[0]);
+            const ts = R.parseTs(r.text[TS]);
             if (ts == null || ts < now - 14 * 3600e3) return;
             const c = fillCache.get(r.row), k = R.rowKind(c && c.fill).kind;
-            const done = k === 'black' || k === 'red' || (k === 'color' && String(r.text[3]).trim());
+            const done = k === 'black' || k === 'red' || (k === 'color' && String(r.text[COL.ARRIVE - 1]).trim());
             if (force || !c || c.key !== keyOf(r) || now - c.at > (done ? 120e3 : 8e3)) need.push(r.row);
           });
           if (need.length) {
@@ -1339,7 +1380,7 @@ script:
           if (!x) return;
           if (op.t === 'v' || op.t === 'clr') {
             const m = /^([A-Z]+)(\d+)(?::([A-Z]+)\d+)?$/.exec(op.addr);
-            const c1 = m[1].charCodeAt(0) - 64, c2 = (m[3] || m[1]).charCodeAt(0) - 64;
+            const c1 = R.colNumber(m[1]), c2 = R.colNumber(m[3] || m[1]);
             back.push({ t: 'v', addr: op.addr, values: [x.text.slice(c1 - 1, c2).map(v => (v == null ? '' : String(v)))] });
           } else if (op.t === 'fill') back.push({ t: 'fill', row: op.row, color: x.fill });
           else if (op.t === 'font') back.push({ t: 'font', row: op.row, color: x.font });

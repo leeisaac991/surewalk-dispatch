@@ -64,17 +64,20 @@
     loading = true;
     try {
       const t = await G.readText(last => last - SCAN + 1);
+      R.setLayout(t.header); // find each column by its header (row 1)
+      const TS = COL.TS - 1;
       let lastIdx = -1;
-      t.text.forEach((r, i) => { if (R.hasTime(r[0])) lastIdx = i; });
+      t.text.forEach((r, i) => { if (R.hasTime(r[TS])) lastIdx = i; });
       const rows = t.text.slice(0, lastIdx + 1).map((text, i) => ({ row: t.top + i, text }));
-      const rosterRows = t.text.slice(lastIdx + 1);
+      // the roster block under the rides starts in the timestamp column (C in the Excel sheet, A in the old one)
+      const rosterRows = t.text.slice(lastIdx + 1).map(r => r.slice(TS));
       // Row colors: tonight's rows only. Open rides are re-checked every refresh, finished ones every 2 min.
-      const now = Date.now(), need = [], keyOf = r => r.text[0] + '|' + r.text[7] + '|' + r.text[3] + '|' + r.text[21];
+      const now = Date.now(), need = [], keyOf = r => [COL.TS, COL.FIRST, COL.ARRIVE, COL.REASON].map(c => r.text[c - 1]).join('|');
       rows.forEach(r => {
-        const ts = R.parseTs(r.text[0]);
+        const ts = R.parseTs(r.text[TS]);
         if (ts == null || ts < now - 14 * 3600e3) return;
         const c = fillCache.get(r.row), k = R.rowKind(c && c.fill).kind;
-        const done = k === 'black' || k === 'red' || (k === 'color' && String(r.text[3]).trim());
+        const done = k === 'black' || k === 'red' || (k === 'color' && String(r.text[COL.ARRIVE - 1]).trim());
         if (force || !c || c.key !== keyOf(r) || now - c.at > (done ? 120e3 : 8e3)) need.push(r.row);
       });
       if (need.length) {
@@ -215,7 +218,7 @@
       if (!x) return;
       if (op.t === 'v' || op.t === 'clr') {
         const m = /^([A-Z]+)(\d+)(?::([A-Z]+)\d+)?$/.exec(op.addr);
-        const c1 = m[1].charCodeAt(0) - 64, c2 = (m[3] || m[1]).charCodeAt(0) - 64;
+        const c1 = R.colNumber(m[1]), c2 = R.colNumber(m[3] || m[1]);
         back.push({ t: 'v', addr: op.addr, values: [x.text.slice(c1 - 1, c2).map(v => (v == null ? '' : String(v)))] });
       } else if (op.t === 'fill') back.push({ t: 'fill', row: op.row, color: x.fill });
       else if (op.t === 'font') back.push({ t: 'font', row: op.row, color: x.font });

@@ -145,20 +145,22 @@ const G = (() => {
       const used = await call('GET', wsPath() + '/usedRange(valuesOnly=true)?$select=rowIndex,rowCount', undefined, sessionHeaders());
       const lastRow = used.rowIndex + used.rowCount;
       const start = Math.max(2, typeof top === 'function' ? top(lastRow) : top);
-      if (lastRow < start) return { lastRow, top: start, text: [] };
-      const rg = await call('GET', wsPath() + `/range(address='A${start}:W${lastRow}')?$select=text`, undefined, sessionHeaders());
-      return { lastRow, top: start, text: rg.text || [] };
+      if (lastRow < start) return { lastRow, top: start, header: [], text: [] };
+      const L = R.colLetter(R.READ_COLS);
+      const hd = await call('GET', wsPath() + `/range(address='A1:${L}1')?$select=text`, undefined, sessionHeaders());
+      const rg = await call('GET', wsPath() + `/range(address='A${start}:${L}${lastRow}')?$select=text`, undefined, sessionHeaders());
+      return { lastRow, top: start, header: (hd.text || [[]])[0], text: rg.text || [] };
     });
   }
-  /** Fill color of whole rows A:W ('' when the row's cells differ; then the first-name cell H decides). */
+  /** Fill color of whole rows ('' when the row's cells differ; then the first-name cell decides). */
   function readFills(rows) {
     return withSession(async () => {
-      const res = await batch(rows.map(r => ({ url: wsPath() + `/range(address='A${r}:W${r}')/format/fill?$select=color` })));
+      const res = await batch(rows.map(r => ({ url: wsPath() + `/range(address='A${r}:${R.colLetter(R.LAST_COL)}${r}')/format/fill?$select=color` })));
       const out = {};
       const mixed = [];
       rows.forEach((r, i) => { const c = res[i] && res[i].color; if (c) out[r] = c.toLowerCase(); else mixed.push(r); });
       if (mixed.length) {
-        const res2 = await batch(mixed.map(r => ({ url: wsPath() + `/range(address='H${r}')/format/fill?$select=color` })));
+        const res2 = await batch(mixed.map(r => ({ url: wsPath() + `/range(address='${R.colLetter(R.COL.FIRST)}${r}')/format/fill?$select=color` })));
         mixed.forEach((r, i) => { out[r] = String((res2[i] && res2[i].color) || '#ffffff').toLowerCase(); });
       }
       return out;
@@ -169,9 +171,10 @@ const G = (() => {
     return withSession(async () => {
       const reqs = [];
       rows.forEach(r => {
-        reqs.push({ url: wsPath() + `/range(address='A${r}:W${r}')?$select=text` });
-        reqs.push({ url: wsPath() + `/range(address='A${r}:W${r}')/format/fill?$select=color` });
-        reqs.push({ url: wsPath() + `/range(address='A${r}:W${r}')/format/font?$select=color` });
+        const L = R.colLetter(R.LAST_COL);
+        reqs.push({ url: wsPath() + `/range(address='A${r}:${L}${r}')?$select=text` });
+        reqs.push({ url: wsPath() + `/range(address='A${r}:${L}${r}')/format/fill?$select=color` });
+        reqs.push({ url: wsPath() + `/range(address='A${r}:${L}${r}')/format/font?$select=color` });
       });
       const res = await batch(reqs);
       const out = {};

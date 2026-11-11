@@ -26,11 +26,13 @@ const G = (() => {
       await ctx.sync();
       const lastRow = used.isNullObject ? 1 : used.rowIndex + used.rowCount;
       const start = Math.max(2, typeof top === 'function' ? top(lastRow) : top);
-      if (lastRow < start) return { lastRow, top: start, text: [] };
-      const rg = ws.getRange(`A${start}:W${lastRow}`);
+      const L = R.colLetter(R.READ_COLS), hd = ws.getRange(`A1:${L}1`);
+      hd.load('text');
+      if (lastRow < start) { await ctx.sync(); return { lastRow, top: start, header: hd.text[0], text: [] }; }
+      const rg = ws.getRange(`A${start}:${L}${lastRow}`);
       rg.load('text');
       await ctx.sync();
-      return { lastRow, top: start, text: rg.text };
+      return { lastRow, top: start, header: hd.text[0], text: rg.text };
     });
   }
   // One color per row, judged like the old panel: 3+ black cells = black, 3+ red = red, else the most common real color.
@@ -43,7 +45,7 @@ const G = (() => {
   function readFills(rows) {
     return Excel.run(async ctx => {
       const ws = sheetOf(ctx);
-      const props = rows.map(r => ws.getRange(`A${r}:W${r}`).getCellProperties({ format: { fill: { color: true } } }));
+      const props = rows.map(r => ws.getRange(`A${r}:${R.colLetter(R.LAST_COL)}${r}`).getCellProperties({ format: { fill: { color: true } } }));
       await ctx.sync();
       const out = {};
       rows.forEach((r, i) => { out[r] = rowColor(props[i].value[0].map(p => p.format.fill.color)); });
@@ -54,7 +56,7 @@ const G = (() => {
     return Excel.run(async ctx => {
       const ws = sheetOf(ctx);
       const got = rows.map(r => {
-        const rg = ws.getRange(`A${r}:W${r}`);
+        const rg = ws.getRange(`A${r}:${R.colLetter(R.LAST_COL)}${r}`);
         rg.load('text');
         return { rg, props: rg.getCellProperties({ format: { fill: { color: true }, font: { color: true } } }) };
       });

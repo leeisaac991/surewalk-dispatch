@@ -16,6 +16,11 @@ In Excel on the web, open the rides workbook ▸ **Home ▸ Add-ins** ▸ add **
 Import** ▸ paste the gist link above (or the YAML) ▸ **Import** ▸ **Script Lab ▸ Run**. Then **⚙ Settings**: your name,
 your GroupMe token (**Check & load chats** ▸ pick the dispatch chat) and the rides tab if it isn't the first tab.
 
+The panel finds each column by its header in row 1 (works with the Excel "Sure Walk Fall 2026" layout — timestamp in
+"Form Submitted" — and the old Google-sheet layout), and reads the shift roster below the rides, starting in the
+timestamp column. A ride counts as picked when its row is colored (tonight's color) and has an Arrival time, or —
+when nobody colored it — 30 minutes after its Arrival time.
+
 No tokens are stored in this repo: each dispatcher's GroupMe token stays in their own browser.
 
 ## Development

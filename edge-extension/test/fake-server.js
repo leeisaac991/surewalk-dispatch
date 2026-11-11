@@ -7,9 +7,9 @@ const W = 30;
 const grid = JSON.parse(fs.readFileSync(EXPORT, 'utf8')).map(r => { const t = r.map(x => (x == null ? '' : String(x))); while (t.length < W) t.push(''); return t; });
 const fill = grid.map(() => Array(W).fill('#FFFFFF')), font = grid.map(() => Array(W).fill('#000000'));
 const paint = (r, c) => { for (let j = 0; j < W; j++) fill[r - 1][j] = c; };
-// rides already picked tonight (driver + arrival) are colored, as in the real sheet
-grid.forEach((r, i) => { if (i > 0 && r[14] && r[3]) paint(i + 1, '#00FF00'); });
-paint(1561, '#000000');
+// rides already picked (driver + arrival) are colored, as in the real sheet; columns found by header
+const H = grid[0].map(x => String(x).toLowerCase()), DRV = H.findIndex(x => /^driver$/.test(x.trim())), ARR = H.findIndex(x => /^arrival/.test(x.trim()));
+grid.forEach((r, i) => { if (i > 0 && r[DRV] && r[ARR] && !process.env.NO_PAINT) paint(i + 1, '#00FF00'); });
 const log = { writes: [], posts: [], deletes: [], calls: 0 };
 
 const colN = s => s.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
@@ -60,7 +60,7 @@ function groupme(method, url, body) {
 
 const STUB = `<script>
 (() => {
-  const RealDate = Date, T0 = RealDate.UTC(2026, 10, 4, 6, 33, 0), R0 = RealDate.now();
+  const RealDate = Date, T0 = ${Date.parse(process.env.NOW || '2026-11-04T06:33:00Z')}, R0 = RealDate.now();
   window.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [T0 + RealDate.now() - R0])); } static now() { return T0 + RealDate.now() - R0; } };
   const mem = { settings: { dispatcher: 'T. Tester', clientId: 'test-client', tenant: 'organizations', fileLink: 'https://utexas-my.sharepoint.com/:x:/g/personal/x/abc',
       sheet: '', gmToken: 'testtokentesttokentest1234', gmGroupId: 'G1', gmGroupName: 'SURE Walk Dispatch', autoPost: true,
@@ -87,6 +87,7 @@ http.createServer((req, res) => {
     }
     if (u.startsWith('/gm/')) { const [s, o] = groupme(req.method, u.slice(3), body ? JSON.parse(body) : undefined); return send(s, o); }
     if (u === '/sheet.json') return send(200, fs.readFileSync(EXPORT));
+    if (u === '/config.json') return send(200, { now: Date.parse(process.env.NOW || '2026-11-04T06:33:00Z'), paint: !process.env.NO_PAINT });
     if (u === '/fake-office.js') return send(200, fs.readFileSync(path.join(__dirname, 'fake-office.js')), 'text/javascript');
     if (u.startsWith('/addin/') && process.env.ADDIN_DIST) { // the built Excel add-in, with the fake Office.js
       const f = u.split('?')[0].slice(7) || 'taskpane.html';

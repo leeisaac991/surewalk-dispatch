@@ -4,8 +4,10 @@
   const xhr = new XMLHttpRequest(); xhr.open('GET', '/sheet.json', false); xhr.send();
   const grid = JSON.parse(xhr.responseText).map(r => { const t = r.map(x => (x == null ? '' : String(x))); while (t.length < W) t.push(''); return t; });
   const fill = grid.map(() => Array(W).fill('#FFFFFF')), font = grid.map(() => Array(W).fill('#000000'));
-  grid.forEach((r, i) => { if (i > 0 && r[14] && r[3]) fill[i].fill('#00FF00'); }); // picked tonight = colored
-  fill[1560].fill('#000000');
+  const cx = new XMLHttpRequest(); cx.open('GET', '/config.json', false); cx.send();
+  const CONF = JSON.parse(cx.responseText);
+  const H = grid[0].map(x => String(x).toLowerCase().trim()), DRV = H.findIndex(x => x === 'driver'), ARR = H.findIndex(x => /^arrival/.test(x));
+  if (CONF.paint) grid.forEach((r, i) => { if (i > 0 && r[DRV] && r[ARR]) fill[i].fill('#00FF00'); }); // picked = colored
   const writes = [];
   const colN = s => s.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
   function parse(a) {
@@ -37,7 +39,7 @@
   window.Office = { HostType: { Excel: 'Excel' }, onReady: cb => setTimeout(() => cb({ host: 'Excel' }), 0) };
   window.__xlWrites = writes;
   // test clock (11/4/2026 0:33 AM Austin) + settings: GroupMe goes to the fake server
-  const RealDate = Date, T0 = RealDate.UTC(2026, 10, 4, 6, 33, 0), R0 = RealDate.now();
+  const RealDate = Date, T0 = CONF.now, R0 = RealDate.now();
   window.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [T0 + RealDate.now() - R0])); } static now() { return T0 + RealDate.now() - R0; } };
   localStorage.setItem('swd.settings', JSON.stringify({ dispatcher: 'T. Tester', gmToken: 'testtokentesttokentest1234', gmGroupId: 'G1', gmGroupName: 'SURE Walk Dispatch', autoPost: true, gmBase: location.origin + '/gm' }));
 })();

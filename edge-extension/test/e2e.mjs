@@ -18,6 +18,7 @@ const srv = async () => { const l = await (await fetch(BASE + '/log')).json(); i
 const click = sel => ev(`(() => { const b = document.querySelector(${JSON.stringify(sel)}); if (!b) return 'missing ' + ${JSON.stringify(sel)}; b.click(); return 'ok'; })()`);
 const toast = () => ev(`document.getElementById('toast').hidden ? '' : document.getElementById('toastText').textContent`);
 const waitIdle = async () => { await sleep(400); for (let i = 0; i < 40; i++) { if (await ev('document.body.style.cursor') !== 'progress') break; await sleep(250); } await sleep(600); };
+const [ROW_A, ROW_CANCEL, ROW_T1, ROW_T2] = (process.env.ROWS || '1574,1567,1571,1572').split(',').map(Number);
 const n = () => ev('JSON.stringify({pending: __swd.night.pending.length, active: __swd.night.active.length, crews: __swd.night.crews.length, colors: __swd.night.colors, wait: __swd.night.wait, shifts: __swd.night.shiftsOn})');
 
 await sleep(6000);
@@ -31,7 +32,7 @@ await click('#colorBtn'); await sleep(200); await click('#swatches button[data-c
 console.log('colors:', JSON.stringify(await ev('__swd.night.colors')));
 
 // 2. assign Eleanor (row 1574) to the first crew with room
-const target = await ev(`__swd.night.pending.find(r => r.row === 1574).id`);
+const target = await ev(`__swd.night.pending.find(r => r.row === ${ROW_A}).id`);
 await ev(`__swd.selected.add(${JSON.stringify(target)}), 1`); await ev('__swd.load()'); await sleep(500);
 const crewKey = await ev(`__swd.night.crews.find(c => !c.cap || c.riders.length < c.cap).key`);
 await ev(`document.getElementById('crewSel').value = ${JSON.stringify(crewKey)}; document.getElementById('crewSel').dispatchEvent(new Event('change')); 1`);
@@ -52,7 +53,7 @@ L = await srv(); console.log('writes:', L.writes.slice(-3).join(' | '));
 console.log('still active?', await ev(`__swd.night.active.some(r => r.id === ${JSON.stringify(target)})`));
 
 // 4. Cancel a pending ride, then undo
-const p2 = await ev(`__swd.night.pending.find(r => r.row === 1567).id`);
+const p2 = await ev(`__swd.night.pending.find(r => r.row === ${ROW_CANCEL}).id`);
 await ev(`document.querySelector('[data-menu="${p2}"]').click(), 1`); await sleep(200);
 await ev(`document.querySelector('[data-act="cancel"][data-id="${p2}"]').click(), 1`); await sleep(300);
 await ev(`document.getElementById('dReason').value = 'Not Answering'; document.getElementById('dlgOk').click(), 1`); await waitIdle();
@@ -61,10 +62,10 @@ L = await srv(); console.log('writes:', L.writes.slice(-5).join(' | '));
 await click('#undoBtn'); await waitIdle();
 console.log('undo toast:', await toast());
 L = await srv(); console.log('writes:', L.writes.slice(-5).join(' | '));
-console.log('1567 pending again?', await ev(`__swd.night.pending.some(r => r.row === 1567)`));
+console.log('cancelled ride pending again?', await ev(`__swd.night.pending.some(r => r.row === ${ROW_CANCEL})`));
 
 // 5. assign two riders, take one off (GroupMe REMOVED post), undo deletes the post
-const two = await ev(`JSON.stringify(__swd.night.pending.filter(r => [1571, 1572].includes(r.row)).map(r => r.id))`);
+const two = await ev(`JSON.stringify(__swd.night.pending.filter(r => [${ROW_T1}, ${ROW_T2}].includes(r.row)).map(r => r.id))`);
 await ev(`JSON.parse(${JSON.stringify(two)}).forEach(i => __swd.selected.add(i)); __swd.load()`); await sleep(600);
 await ev(`document.getElementById('crewSel').value = ${JSON.stringify(crewKey)}; 1`);
 await click('#assignBtn'); await waitIdle();

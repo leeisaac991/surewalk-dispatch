@@ -6,9 +6,33 @@
 /* exported R */
 const R = (() => {
   const TZ = 'America/Chicago';
-  const COL = { TS: 1, DISPATCH: 2, CALL: 3, ARRIVE: 4, WAIT: 5, EID: 6, LAST: 7, FIRST: 8, PHONE: 9, PICKUP: 10, DROPOFF: 11,
-    ADA: 12, LOC: 13, VAN: 14, DRIVER: 15, NAV: 16, EMAIL: 18, REASON: 22, NOTES: 23 };
-  const LAST_COL = 23;          // A:W
+  // Column numbers (1 = A). Set from the sheet's header row by setLayout(); these defaults are the Excel
+  // "Sure Walk Fall 2026" layout (Microsoft Forms: Id, Start time, Form Submitted, Time Submitted, Dispatcher, …).
+  const COL = { TS: 3, DISPATCH: 5, CALL: 6, ARRIVE: 7, WAIT: 8, EID: 9, LAST: 10, FIRST: 11, PHONE: 12, PICKUP: 13, DROPOFF: 14,
+    ADA: 15, LOC: 16, VAN: 17, DRIVER: 18, NAV: 19, EMAIL: 23, REASON: 24, NOTES: 25 };
+  let LAST_COL = 25;
+  const READ_COLS = 30;         // columns read from the sheet (A:AD); the layout is found inside them
+  const colLetter = n => { let s = ''; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  const colNumber = s => String(s).toUpperCase().split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  // Header text -> column. First match wins, so "Form Submitted" beats "Start time" for the timestamp.
+  const HEADERS = [
+    ['TS', /^(form submitted|timestamp|completion time)/], ['DISPATCH', /^dispatch/], ['CALL', /^call time/], ['ARRIVE', /^arrival/],
+    ['WAIT', /^wait/], ['EID', /\beid\b/], ['LAST', /^last name/], ['FIRST', /^first name/], ['PHONE', /^phone/],
+    ['PICKUP', /^pick ?-?up/], ['DROPOFF', /^drop ?-?off/], ['ADA', /disabilit|^ada\b/], ['LOC', /^location$/],
+    ['VAN', /^(van|vehicle)/], ['DRIVER', /^driver$/], ['NAV', /^navigator$/], ['EMAIL', /^email/], ['REASON', /cancel/], ['NOTES', /^notes?$/],
+  ];
+  /** Reads the header row (row 1 text) and points COL at the right columns. Throws if a needed column is missing. */
+  function setLayout(header) {
+    const h = (header || []).map(x => String(x || '').toLowerCase().replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim());
+    const found = {};
+    HEADERS.forEach(([k, re]) => { const i = h.findIndex((x, j) => re.test(x) && !Object.values(found).includes(j + 1)); if (i >= 0) found[k] = i + 1; });
+    const need = ['TS', 'FIRST', 'PHONE', 'PICKUP', 'DROPOFF', 'DRIVER', 'NAV', 'ARRIVE', 'CALL'];
+    const missing = need.filter(k => !found[k]);
+    if (missing.length) throw new Error(`Can't find these columns in row 1: ${missing.join(', ')} — is the rides tab selected?`);
+    Object.assign(COL, found);
+    LAST_COL = Math.max(...Object.values(COL));
+    return Object.assign({}, COL);
+  }
   const EDIT_WINDOW_MIN = 60;   // never write to finished rides submitted longer ago than this
   const DUP_WINDOW_MIN = 40;    // possible-duplicate check looks back this far
   const LOOKBACK_HOURS = 14;    // tonight's rows
@@ -56,7 +80,7 @@ const R = (() => {
   }
   const hasTime = text => /\d{1,2}:\d{2}/.test(String(text || ''));
   // A ride's id: its timestamp + phone (or first name) — stable even when rows move.
-  const rideIdOf = text => { const ts = parseTs(text[0]); return ts == null ? '' : ts + '|' + (String(text[8] || '').replace(/\D/g, '').slice(-10) || String(text[7] || '').toLowerCase().replace(/[^a-z0-9]/g, '')); };
+  const rideIdOf = text => { const ts = parseTs(text[COL.TS - 1]); return ts == null ? '' : ts + '|' + (String(text[COL.PHONE - 1] || '').replace(/\D/g, '').slice(-10) || String(text[COL.FIRST - 1] || '').toLowerCase().replace(/[^a-z0-9]/g, '')); };
 
   /* ---------- names ---------- */
   const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -109,6 +133,14 @@ const R = (() => {
   const brightOf = hex => Object.keys(PASTEL_OF).find(b => PASTEL_OF[b] === String(hex).toLowerCase()) || null;
   // A colored row only counts as picked when Arrival (D) is filled too (Forms copies the row above's color).
   const isPickedRow = (kind, arrival) => kind.kind === 'color' && !!String(arrival || '').trim();
+  const PICKED_GUESS_MIN = 30;
+  // "19:07" -> minutes since that clock time (within the last 24 h); null if it isn't a time.
+  function minutesAgo(hhmm, nowMs) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '').trim());
+    if (!m) return null;
+    const p = parts(nowMs == null ? Date.now() : nowMs);
+    return ((p.h * 60 + p.mi) - (Number(m[1]) * 60 + Number(m[2])) + 1440) % 1440;
+  }
   const hasReason = v => { const s = String(v == null ? '' : v).trim(); return !!s && s !== '0'; };
 
   /* ---------- roster block below the rides ---------- */
@@ -249,7 +281,7 @@ const R = (() => {
     const night = nightKey(nowMs), cutoff = nowMs - LOOKBACK_HOURS * 3600e3, editCutoff = nowMs - EDIT_WINDOW_MIN * 60e3;
     const rides = [], prior = [], waits = [], seen = {}, colorCounts = { A: {}, B: {} };
     rows.forEach(({ row, text, fill }) => {
-      const ts = parseTs(text[0]);
+      const ts = parseTs(text[COL.TS - 1]);
       if (ts == null || ts < cutoff) return;
       const get = c => String(text[c - 1] == null ? '' : text[c - 1]).trim();
       const kind = rowKind(fill), tonight = nightKey(ts) === night;
@@ -264,9 +296,13 @@ const R = (() => {
         zone: typeof zoneOf_ === 'function' ? zoneOf_(get(COL.DROPOFF)) : '',
         offCampus: typeof offCampusPickup_ === 'function' ? !!offCampusPickup_(get(COL.PICKUP)) : false,
       };
+      // Picked = a colored row with an Arrival time. A row nobody colored counts as picked once its Arrival is
+      // PICKED_GUESS_MIN old (the Excel sheet isn't always colored), so finished rides don't fill up the crews.
+      const arrAgo = minutesAgo(r.arrived, nowMs);
+      const picked = isPickedRow(kind, r.arrived) || (kind.kind === 'none' && r.driver && arrAgo != null && arrAgo >= PICKED_GUESS_MIN);
       r.state = hasReason(r.reason) || kind.kind === 'black' ? 'cancelled' : kind.kind === 'red' ? 'dup'
-        : isPickedRow(kind, r.arrived) ? 'picked' : r.driver ? 'assigned' : 'pending';
-      if (r.state === 'picked' && tonight) { const s = colorCounts[isPastel(kind.color) ? 'B' : 'A']; s[kind.color] = (s[kind.color] || 0) + 1; }
+        : picked ? 'picked' : r.driver ? 'assigned' : 'pending';
+      if (r.state === 'picked' && tonight && kind.kind === 'color') { const s = colorCounts[isPastel(kind.color) ? 'B' : 'A']; s[kind.color] = (s[kind.color] || 0) + 1; }
       if (r.state === 'cancelled' || r.state === 'dup') { if (ts >= editCutoff) rides.push(r); return; }
       // possible duplicate: same route, same name and same phone within 40 min (a suggestion only)
       const same = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -312,7 +348,7 @@ const R = (() => {
   // fresh: { text: [A..W], fill }
   function assertEditable(fresh, row, nowMs) {
     nowMs = nowMs == null ? Date.now() : nowMs;
-    const ts = parseTs(fresh.text[0]);
+    const ts = parseTs(fresh.text[COL.TS - 1]);
     if (ts == null) throw new Error(`Row ${row} isn't a ride — not editing it.`);
     const kind = rowKind(fresh.fill);
     if (kind.kind === 'black' || kind.kind === 'red') throw new Error(`Row ${row} is marked ${kind.kind === 'red' ? 'duplicate (red)' : 'cancelled (black)'} — not editing it.`);
@@ -347,7 +383,7 @@ const R = (() => {
   const removedText = (rest, gone, word) => (rest.length ? ['Updated ride!'].concat(byPickup(rest).map(rideLine)) : [])
     .concat([`${word}: ` + gone.map(r => String(r.first || '').trim()).join(', ')]).join('\n');
 
-  return { TZ, COL, LAST_COL, EDIT_WINDOW_MIN, PICK_GAP_MIN, LOCATIONS, VANS, CANCEL_REASONS, DUPLICATE_COLOR, PASTEL_OF,
+  return { TZ, COL, get LAST_COL() { return LAST_COL; }, READ_COLS, colLetter, colNumber, setLayout, EDIT_WINDOW_MIN, PICK_GAP_MIN, LOCATIONS, VANS, CANCEL_REASONS, DUPLICATE_COLOR, PASTEL_OF,
     parts, wallToMs, fmtTime, nightKey, nightMin, parseTs, hasTime, rideIdOf, norm, sameName, samePair, crewKey, crewLabel,
     rowKind, isColored, isPastel, pastelOf, brightOf, hasReason, parseRoster, autoShiftLetters, activeShifts, shadeFor,
     waitMinutes, buildNight, assertEditable, checkAssign, rideLine, byPickup, assignText, removedText };
