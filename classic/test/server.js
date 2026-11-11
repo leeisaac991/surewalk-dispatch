@@ -55,6 +55,16 @@ http.createServer((req, res) => {
     if (u === '/?snippet') return send(200, '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script src="/fake-excel.js"></script></body></html>', 'text/html');
     if (u === '/') return send(200, '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><script src="/fake-excel.js"></script><script src="/dist/host.js"></script></body></html>', 'text/html');
     if (u === '/fake-excel.js') return send(200, fs.readFileSync(path.join(HERE, 'fake-excel.js')), 'text/javascript');
+    if (u === '/fake-dialog.js') return send(200, fs.readFileSync(path.join(HERE, 'fake-dialog.js')), 'text/javascript');
+    if (u.startsWith('/site/')) { // the add-in's site (../../docs), with Office.js swapped for the fakes
+      const f = u.split('?')[0].slice(6) || 'taskpane.html';
+      let data;
+      try { data = fs.readFileSync(path.join(HERE, '..', '..', 'docs', f)); } catch (e) { return send(404, 'not found', 'text/plain'); }
+      if (f === 'taskpane.html') data = String(data).replace('https://appsforoffice.microsoft.com/lib/1/hosted/office.js', '/fake-excel.js');
+      if (f === 'dialog.html') data = String(data).replace('https://appsforoffice.microsoft.com/lib/1/hosted/office.js', '/fake-dialog.js');
+      if (f === 'backend.js') data = String(data).replace(/https:\/\/api\.groupme\.com\/v3/g, `http://localhost:${PORT}/gm`);
+      return send(200, data, f.endsWith('.js') ? 'text/javascript' : f.endsWith('.png') ? 'image/png' : 'text/html');
+    }
     if (u.startsWith('/dist/')) {
       let data = fs.readFileSync(path.join(DIST, u.slice(6)), 'utf8');
       if (u === '/dist/backend.js') data = data.replace(/https:\/\/api\.groupme\.com\/v3/g, `http://localhost:${PORT}/gm`);

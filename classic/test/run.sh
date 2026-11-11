@@ -19,6 +19,8 @@ PY
 export PAINT
 cd "$HERE"; node server.js "$EXPORT" 8778 >/dev/null & SRV=$!
 PROF=$(mktemp -d)
-chromium-browser --headless=new --remote-debugging-port=9337 --password-store=basic --user-data-dir="$PROF" --window-size=430,950 http://localhost:8778/ >/dev/null 2>&1 & CHR=$!
+# the add-in's side panel page (docs/taskpane.html); SCRIPTLAB=1 tests the Script Lab way instead
+URL=http://localhost:8778/site/taskpane.html; [ -n "${SCRIPTLAB:-}" ] && URL=http://localhost:8778/
+chromium-browser --headless=new --remote-debugging-port=9337 --password-store=basic --user-data-dir="$PROF" --window-size=430,950 "$URL" >/dev/null 2>&1 & CHR=$!
 trap 'kill $SRV $CHR 2>/dev/null; sleep 1; rm -rf "$PROF" 2>/dev/null || true' EXIT
 sleep 1; timeout 230 node e2e.mjs

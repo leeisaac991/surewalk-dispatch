@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURE Walk Dispatch</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>html, body { margin: 0; height: 100%; font: 14px "Segoe UI", system-ui, sans-serif; } iframe { border: 0; width: 100%; height: 100%; display: block; }</style>
+</head>
+<body>
+<div id="msg" style="padding:24px;color:#6e6e73">Opening SURE Walk Dispatch…</div>
+<script>
+  /*
+   * The popped-out panel (an Excel dialog window). It shows the same page as the side panel, in a frame, and hands
+   * every panel call to the side panel (the only place that can read and write the workbook) through Excel's
+   * dialog messages. Long messages travel in pieces.
+   */
+  const CHUNK = 24000, pending = {}, parts = {};
+  let seq = 0, alive = true;
+  function gone(why) {
+    alive = false;
+    document.body.innerHTML = '<div style="padding:24px;max-width:520px"><h3>SURE Walk Dispatch</h3><p>' + why + '</p>' +
+      '<p>Close this window, then open <b>SURE Walk ▸ Dispatch</b> in Excel and press <b>⧉ Pop out</b> again.</p></div>';
+    Object.keys(pending).forEach(id => { pending[id].fail(new Error(why)); delete pending[id]; });
+  }
+  function send(obj) {
+    const s = JSON.stringify(obj), id = 'm' + (++seq), n = Math.max(1, Math.ceil(s.length / CHUNK));
+    for (let i = 0; i < n; i++) Office.context.ui.messageParent('SWC|' + id + '|' + i + '|' + n + '|' + s.slice(i * CHUNK, (i + 1) * CHUNK));
+  }
+  function receive(str) { // -> the whole message once its last piece arrives
+    const m = /^SWC\|([^|]+)\|(\d+)\|(\d+)\|([\s\S]*)$/.exec(str);
+    if (!m) return null;
+    const p = parts[m[1]] || (parts[m[1]] = []);
+    p[+m[2]] = m[4];
+    if (p.filter(x => x != null).length < +m[3]) return null;
+    delete parts[m[1]];
+    return JSON.parse(p.join(''));
+  }
+  // what the panel page (in the frame) calls — see the SHIM in host.js
+  window.SWC_HOST = {
+    call(fn, args) {
+      if (!alive) return Promise.reject(new Error('Not connected to Excel.'));
+      const id = 'c' + (++seq);
+      return new Promise((ok, fail) => {
+        pending[id] = { ok, fail, at: Date.now() };
+        send({ t: 'call', id, fn, args });
+      });
+    },
+    reload() { send({ t: 'reload' }); },
+  };
+  setInterval(() => { // the side panel was closed or reloaded: calls never come back
+    const old = Object.values(pending).find(p => Date.now() - p.at > 60000);
+    if (old) gone('This window lost its connection to the Excel side panel (it was closed or reloaded).');
+  }, 5000);
+
+  Office.onReady(() => {
+    Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, arg => {
+      const m = receive(arg.message);
+      if (!m) return;
+      if (m.t === 'page') { // the panel page, sent by the side panel
+        document.body.innerHTML = '<iframe id="swcFrame" title="SURE Walk Dispatch"></iframe>';
+        document.getElementById('swcFrame').srcdoc = m.html;
+      } else if (m.t === 'ret' && pending[m.id]) {
+        const p = pending[m.id]; delete pending[m.id];
+        m.ok ? p.ok(m.result) : p.fail(new Error(m.error || 'Error'));
+      } else if (m.t === 'bye') gone(m.why || 'The Excel side panel closed this window.');
+    }, res => {
+      if (res.status !== Office.AsyncResultStatus.Succeeded) { gone("Excel didn't let this window talk to the side panel: " + res.error.message); return; }
+      send({ t: 'ready' });
+    });
+  });
+</script>
+</body>
+</html>

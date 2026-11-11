@@ -80,15 +80,17 @@ await sleep(1500); await shot('c2.png');
 await send('Runtime.evaluate', { expression: `document.getElementById('swcPop').click()`, userGesture: true });
 await sleep(6000);
 const pages = (await (await fetch('http://localhost:9337/json/list')).json()).filter(t => t.type === 'page');
-const popT = pages.find(t => t.url === 'about:blank' || /SURE Walk/.test(t.title));
+const popT = pages.find(t => /dialog\.html/.test(t.url));
 console.log('pop-out window opened:', !!popT, '| side panel says:', JSON.stringify(await ev(`document.body.innerText.slice(0, 60)`)));
 if (popT) {
   const pw = new WebSocket(popT.webSocketDebuggerUrl); await new Promise(r => { pw.onopen = r; });
   let pid = 0; const pp = {};
   pw.onmessage = e => { const m = JSON.parse(e.data); if (pp[m.id]) { pp[m.id](m.result); delete pp[m.id]; } };
   const pev = x => new Promise(r => { pp[++pid] = r; pw.send(JSON.stringify({ id: pid, method: 'Runtime.evaluate', params: { expression: x, awaitPromise: true, returnByValue: true } })); }).then(r => r.result && r.result.value);
-  console.log('window shows the panel:', await pev(`!!document.querySelector('#newBuild')`), '| call from the window:',
-    await pev(`new Promise(ok => google.script.run.withSuccessHandler(s => ok('pending ' + s.pending.length + ', crews ' + s.crews.length)).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`));
+  const PF = `document.getElementById('swcFrame').contentWindow`;
+  console.log('window shows the panel:', await pev(`!!(document.getElementById('swcFrame') && ${PF}.document.querySelector('#newBuild'))`), '| call from the window:',
+    await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(s => ok('pending ' + s.pending.length + ', crews ' + s.crews.length + ', board ' + (s.board || []).length)).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`));
+  console.log('assign from the window:', await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(r => ok(typeof r === 'object' && r.state ? 'ok' : JSON.stringify(r))).withFailureHandler(e => ok('FAIL ' + e.message)).act('setTonightColor', ['#ffff00', 'A']))`));
   await pev('window.close(), 1');
   await sleep(2000);
   console.log('after closing the window, back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));

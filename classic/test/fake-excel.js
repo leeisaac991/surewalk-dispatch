@@ -56,7 +56,22 @@
     getUsedRangeOrNullObject() { return { isNullObject: false, rowIndex: 0, rowCount: lastRow(), load() {} }; } };
   const workbook = { name: 'Sure Walk Fall 2026.xlsx', load() {}, worksheets: { getFirst: () => ws, getItem: () => ws } };
   window.Excel = { run: async fn => fn({ workbook, sync: async () => {} }), ClearApplyTo: { contents: 'Contents' } };
-  window.Office = { onReady: cb => setTimeout(() => cb({ host: 'Excel' }), 0) };
+  // Office, including a stand-in for Excel's dialog window: a test window whose messages go through the same calls
+  const EventType = { DialogMessageReceived: 'dm', DialogEventReceived: 'de', DialogParentMessageReceived: 'dp' };
+  const AsyncResultStatus = { Succeeded: 'succeeded', Failed: 'failed' };
+  window.Office = { onReady: cb => setTimeout(() => cb({ host: 'Excel' }), 0), EventType, AsyncResultStatus,
+    context: { ui: { displayDialogAsync(url, opts, cb) {
+      const w = window.open(url, 'swc_dialog', 'popup=yes,width=1200,height=850');
+      if (!w) { cb({ status: 'failed', error: { message: 'blocked', code: 12009 } }); return; }
+      const on = {}, queue = [];
+      w.__swcQueue = queue;
+      window.__fakeDlg = { toParent: s => on.dm && on.dm({ message: s }) };
+      const dialog = { addEventHandler(t, fn) { on[t] = fn; }, close() { w.close(); },
+        messageChild(s) { if (w.__fromParent) w.__fromParent(s); else queue.push(s); } };
+      const watch = setInterval(() => { if (w.closed) { clearInterval(watch); if (on.de) on.de({ error: 12006 }); } }, 500);
+      dialog.close = () => { clearInterval(watch); w.close(); };
+      cb({ status: 'succeeded', value: dialog });
+    } } } };
   window.__xl = { writes, text: (r, c) => text(cell(r - 1, colN(c) - 1)), bg: (r, c) => cell(r - 1, colN(c) - 1).bg, fc: (r, c) => cell(r - 1, colN(c) - 1).fc,
     type(r, vals) { vals.forEach((s, j) => Object.assign(cell(r - 1, j), typed(s))); }, paint(r, color) { for (let j = 0; j < W; j++) cell(r - 1, j).bg = color; } };
   // the test clock, here and in the worker

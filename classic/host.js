@@ -331,7 +331,6 @@
   const barStyle = `position:fixed;top:0;left:0;right:0;height:${BAR}px;display:flex;align-items:center;gap:8px;padding:0 10px;` +
     'background:#bf5700;color:#fff;font:600 13px Segoe UI,system-ui,sans-serif;z-index:5;box-sizing:border-box';
   const btnStyle = 'border:0;border-radius:99px;padding:3px 12px;background:#fff;color:#bf5700;font:600 12px Segoe UI,system-ui,sans-serif;cursor:pointer';
-  let popup = null, watch = null;
 
   function showInPane() {
     document.body.style.margin = '0';
@@ -351,43 +350,66 @@
     n.hidden = false;
     document.getElementById('swcNoteX').onclick = e => { e.preventDefault(); n.hidden = true; };
   }
-  function popOut() {
-    let w = null;
-    try { w = window.open('', 'surewalk_dispatch', 'popup=yes,width=1280,height=900'); }
-    catch (e) { // the add-in frame isn't allowed to open windows at all
-      console.error('Pop out:', e);
-      note(`<b>Excel didn't let the panel open a new window</b> (${String(e.message || e).replace(/</g, '&lt;')}). Widen this side panel instead: drag its left edge.`);
-      return;
-    }
-    if (!w) {
-      note('<b>The new window was blocked.</b> In Edge, click the <b>pop-up blocked</b> icon at the right end of the address bar, choose ' +
-        '<b>Always allow pop-ups</b> for this site, then press <b>⧉ Pop out</b> again. If no such icon appears, Excel doesn\'t allow new windows here: ' +
-        'widen this side panel instead (drag its left edge).');
-      return;
-    }
-    try {
-      w.document.open(); w.document.write(pageHtml()); w.document.close();
-      w.document.title = 'SURE Walk Dispatch';
-    } catch (e) {
-      console.error('Pop out:', e);
-      try { w.close(); } catch (x) { /* gone */ }
-      note(`<b>A window opened, but the panel couldn't be put in it</b> (${String(e.message || e).replace(/</g, '&lt;')}).`);
-      return;
-    }
-    popup = w;
-    // one copy of the panel at a time: the side panel steps aside while the window is open
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // One copy of the panel at a time: while it's popped out, the side panel only keeps the connection to the sheet.
+  function poppedOut(back) {
     document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span></div>
       <div style="padding:${BAR + 18}px 18px 18px;font:14px Segoe UI,system-ui,sans-serif;color:#333">
         <p style="margin:0 0 12px"><b>The panel is open in its own window.</b><br>Keep this side panel open: it's the window's connection to the sheet.</p>
-        <button id="swcFocus" style="${btnStyle};border:1px solid #bf5700;margin-right:6px">Show the window</button>
         <button id="swcBack" style="${btnStyle};border:1px solid #bf5700">Bring it back here</button></div>`;
-    document.getElementById('swcFocus').onclick = () => { try { popup.focus(); } catch (e) { /* closed */ } };
-    document.getElementById('swcBack').onclick = () => { try { popup.close(); } catch (e) { /* closed */ } };
-    clearInterval(watch);
-    watch = setInterval(() => { if (!popup || popup.closed) { clearInterval(watch); popup = null; showInPane(); } }, 700);
+    document.getElementById('swcBack').onclick = back;
+  }
+
+  /*
+   * Pop out. Excel on the web doesn't let add-ins open ordinary browser windows (window.open is blocked in the
+   * add-in frame), so the panel uses Excel's own dialog window. Excel only opens a page from the add-in's own site
+   * there, so this works in the SURE Walk add-in, not in Script Lab. The dialog page (dialog.html) shows the same panel and sends every call here.
+   */
+  const CHUNK = 24000;
+  let dlg = null, dlgSeq = 0;
+  const dlgParts = {};
+  function dlgSend(obj) {
+    if (!dlg) return;
+    const s = JSON.stringify(obj), id = 'p' + (++dlgSeq), n = Math.max(1, Math.ceil(s.length / CHUNK));
+    for (let i = 0; i < n; i++) dlg.messageChild('SWC|' + id + '|' + i + '|' + n + '|' + s.slice(i * CHUNK, (i + 1) * CHUNK));
+  }
+  function dlgReceive(str) {
+    const m = /^SWC\|([^|]+)\|(\d+)\|(\d+)\|([\s\S]*)$/.exec(str);
+    if (!m) return null;
+    const p = dlgParts[m[1]] || (dlgParts[m[1]] = []);
+    p[+m[2]] = m[4];
+    if (p.filter(x => x != null).length < +m[3]) return null;
+    delete dlgParts[m[1]];
+    return JSON.parse(p.join(''));
+  }
+  function onDialogMessage(arg) {
+    const m = dlgReceive(arg.message);
+    if (!m) return;
+    if (m.t === 'ready') dlgSend({ t: 'page', html: pageHtml() });
+    else if (m.t === 'call') rpc(m.fn, m.args).then(r => dlgSend({ t: 'ret', id: m.id, ok: true, result: r }), e => dlgSend({ t: 'ret', id: m.id, ok: false, error: e.message || String(e) }));
+    else if (m.t === 'reload') location.reload();
+  }
+  function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } dlg = null; showInPane(); }
+  function popOut() {
+    const ui = window.Office && Office.context && Office.context.ui;
+    if (!window.__SWC_HOSTED || !ui || !ui.displayDialogAsync) {
+      note('<b>Pop out only works in the SURE Walk add-in, not in Script Lab.</b> Excel blocks new windows from Script Lab. ' +
+        'Install the add-in once (see <b>github.com/leeisaac991/surewalk-dispatch</b> ▸ classic), or widen this side panel by dragging its left edge.');
+      return;
+    }
+    ui.displayDialogAsync(new URL('dialog.html', location.href).href, { height: 85, width: 75, displayInIframe: false }, res => {
+      if (res.status !== Office.AsyncResultStatus.Succeeded) {
+        note(`<b>Excel couldn't open the window</b> (${esc(res.error && res.error.message)}, code ${esc(res.error && res.error.code)}).`);
+        return;
+      }
+      dlg = res.value;
+      dlg.addEventHandler(Office.EventType.DialogMessageReceived, onDialogMessage);
+      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { dlg = null; showInPane(); }); // closed with its ✕
+      poppedOut(bringBack);
+    });
   }
   // reloading the panel in Excel ends the window's connection, so the window closes with it
-  window.addEventListener('beforeunload', () => { try { if (popup) popup.close(); } catch (e) { /* gone */ } });
+  window.addEventListener('beforeunload', () => { try { if (dlg) dlg.close(); } catch (e) { /* gone */ } });
 
   function problem(msg) {
     document.body.innerHTML = `<div style="font:14px Segoe UI,system-ui,sans-serif;padding:16px;max-width:460px">
@@ -402,7 +424,7 @@
       cache = null; dirty = true;
       await readSheet(); // checks the tab and its columns before showing the panel
       if (!worker && !direct) startBackend();
-      if (popup && !popup.closed) return; // already showing in its own window
+      if (dlg) return; // already showing in its own window
       showInPane();
     } catch (e) {
       problem(e && e.code === 'ItemNotFound' ? `There's no tab named "${conf.sheet}".` : (e.message || String(e)));
