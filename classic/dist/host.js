@@ -335,19 +335,45 @@
 
   function showInPane() {
     document.body.style.margin = '0';
-    document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span><span style="flex:1"></span>
+    document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span><span id="swcMsg" style="flex:1;font-weight:400;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <button id="swcPop" style="${btnStyle}" title="Open the panel in its own window: resize it, maximize it, or move it to another screen">⧉ Pop out</button></div>
+      <div id="swcNote" hidden style="position:fixed;top:${BAR}px;left:0;right:0;z-index:6;background:#fff4e5;color:#5a3000;border-bottom:1px solid #f0c48a;
+        padding:8px 12px;font:13px Segoe UI,system-ui,sans-serif;line-height:1.4"></div>
       <iframe id="swcFrame" title="SURE Walk Dispatch" style="position:fixed;top:${BAR}px;left:0;width:100%;height:calc(100% - ${BAR}px);border:0"></iframe>`;
     document.getElementById('swcFrame').srcdoc = pageHtml();
     document.getElementById('swcPop').onclick = popOut;
   }
+  // Excel add-ins can't show alert boxes, so problems are explained in a note under the bar.
+  function note(html) {
+    const n = document.getElementById('swcNote');
+    if (!n) return;
+    n.innerHTML = html + ' <a href="#" id="swcNoteX" style="color:#bf5700;font-weight:600;margin-left:6px">OK</a>';
+    n.hidden = false;
+    document.getElementById('swcNoteX').onclick = e => { e.preventDefault(); n.hidden = true; };
+  }
   function popOut() {
-    const w = window.open('', 'surewalk_dispatch', 'popup=yes,width=1280,height=900');
-    if (!w) { alert('The browser blocked the new window. Allow pop-ups for Excel (the icon at the right of the address bar), then press Pop out again.'); return; }
+    let w = null;
+    try { w = window.open('', 'surewalk_dispatch', 'popup=yes,width=1280,height=900'); }
+    catch (e) { // the add-in frame isn't allowed to open windows at all
+      console.error('Pop out:', e);
+      note(`<b>Excel didn't let the panel open a new window</b> (${String(e.message || e).replace(/</g, '&lt;')}). Widen this side panel instead: drag its left edge.`);
+      return;
+    }
+    if (!w) {
+      note('<b>The new window was blocked.</b> In Edge, click the <b>pop-up blocked</b> icon at the right end of the address bar, choose ' +
+        '<b>Always allow pop-ups</b> for this site, then press <b>⧉ Pop out</b> again. If no such icon appears, Excel doesn\'t allow new windows here: ' +
+        'widen this side panel instead (drag its left edge).');
+      return;
+    }
     try {
       w.document.open(); w.document.write(pageHtml()); w.document.close();
       w.document.title = 'SURE Walk Dispatch';
-    } catch (e) { alert("Couldn't open the panel in its own window here: " + e.message); try { w.close(); } catch (x) { /* gone */ } return; }
+    } catch (e) {
+      console.error('Pop out:', e);
+      try { w.close(); } catch (x) { /* gone */ }
+      note(`<b>A window opened, but the panel couldn't be put in it</b> (${String(e.message || e).replace(/</g, '&lt;')}).`);
+      return;
+    }
     popup = w;
     // one copy of the panel at a time: the side panel steps aside while the window is open
     document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span></div>
