@@ -13,7 +13,8 @@ ws.onmessage = e => { const m = JSON.parse(e.data);
 const send = (method, params = {}) => new Promise(r => { pend[++id] = r; ws.send(JSON.stringify({ id, method, params })); });
 await send('Runtime.enable'); await send('Page.enable');
 const ev = async x => { const r = await send('Runtime.evaluate', { expression: x, awaitPromise: true, returnByValue: true }); return r.exceptionDetails ? 'EVAL-ERR ' + JSON.stringify(r.exceptionDetails).slice(0, 300) : r.result.value; };
-const call = (fn, args) => ev(`new Promise(ok => google.script.run.withSuccessHandler(ok).withFailureHandler(e => ok('FAIL ' + e.message))[${JSON.stringify(fn)}](...${JSON.stringify(args || [])}))`);
+const F = `document.getElementById('swcFrame').contentWindow`; // the panel page, in its frame in the side panel
+const call = (fn, args) => ev(`new Promise(ok => ${F}.google.script.run.withSuccessHandler(ok).withFailureHandler(e => ok('FAIL ' + e.message))[${JSON.stringify(fn)}](...${JSON.stringify(args || [])}))`);
 const act = (name, args) => call('act', [name, args]);
 const shot = async f => { if (!SHOTS) return; const s = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(`${SHOTS}/${f}`, Buffer.from(s.data, 'base64')); };
 const row = r => ev(`JSON.stringify({E: __xl.text(${r},'E'), F: __xl.text(${r},'F'), G: __xl.text(${r},'G'), PQRS: ['P','Q','R','S'].map(c => __xl.text(${r},c)).join('|'), X: __xl.text(${r},'X'), fill: __xl.bg(${r},'A'), fillZ: __xl.bg(${r},'AE'), font: __xl.fc(${r},'C')})`);
@@ -21,7 +22,7 @@ const ok = r => (typeof r === 'string' ? r : 'ok');
 const post = (path, b) => fetch(BASE + path, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
 
 await sleep(9000);
-console.log('panel up:', await ev(`!!document.querySelector('#newBuild') && !document.body.innerText.includes("Can't find")`), '| title:', await ev('document.title'));
+console.log('panel up:', await ev(`!!${F}.document.querySelector('#newBuild') && !${F}.document.body.innerText.includes("Can't find")`), '| pop-out button:', await ev(`!!document.getElementById('swcPop')`));
 // copied highlight: rows 225/226 were painted like 224 (see PAINT) and are untouched -> cleared; 224 has a dispatcher -> kept
 console.log('copied colors: 224', await ev(`__xl.bg(224,'A')`), '225', await ev(`__xl.bg(225,'A')`), '226', await ev(`__xl.bg(226,'A')`));
 let st = await call('getState', [true]);
@@ -47,9 +48,15 @@ console.log('undo ->', ok(await act('undoAction', [c2.undo])), await row(225));
 const members = (await (await fetch(BASE + '/gm/groups/G1')).json()).response.members, idOf = n => (members.find(m => m.nickname === n) || {}).user_id;
 await post('/gm-crew', { user_id: idOf(crew.nav) || '12', name: crew.nav + ' T', text: 'good evening' }); // the chat has history before tonight's posts
 console.log('token:', JSON.stringify(await call('saveGroupMeToken', ['testtokentesttokentest1234'])), '| group:', ok(await act('setGroupMeGroup', ['G1', 'SURE Walk Dispatch'])), '| sync on:', ok(await act('setSyncRunning', [true])));
+// the crew says "empty" in GroupMe, then gets a ride: they must show busy right away
+await post('/gm-crew', { user_id: idOf(crew.driver), name: crew.driver + ' T', text: 'empty' });
+await sleep(1500);
+st = await call('getState', [false]);
+const statusOf = s => ((s.board || []).find(b => b.key === crew.key) || {}).status;
+console.log('after "empty": crew is', statusOf(st));
 const p3 = st.pending.find(x => x.row === 223), ref3 = { row: p3.row, id: p3.id };
 const a3 = await act('assignRides', [[ref3], crew, 'Auto', crew.van]);
-console.log('assign 223 ->', typeof a3 === 'string' ? a3 : 'ok', await row(223));
+console.log('assign 223 ->', typeof a3 === 'string' ? a3 : 'ok', await row(223), '| crew is now', typeof a3 === 'string' ? '?' : statusOf(a3.state));
 const msg = typeof a3 === 'string' ? '' : a3.result;
 const sent = await call('sendGroupMe', [msg + '\n@' + crew.driver, [], null]);
 console.log('ride post sent:', typeof sent === 'string' ? sent : 'ok');
@@ -61,12 +68,30 @@ st = await call('getState', [false]); // a full refresh syncs GroupMe
 console.log('after "at jester":', await row(223));
 await sleep(21000); st = await call('getState', [false]); // reactions are re-read every 20 s
 console.log('heart on 223:', JSON.stringify(st.chat && st.chat.rideAck && st.chat.rideAck[p3.id]));
-console.log('heart chip in panel:', await ev(`(document.body.innerText.match(/❤️[^\\n]{0,30}/) || [''])[0]`));
+console.log('heart chip in panel:', await ev(`(${F}.document.body.innerText.match(/❤️[^\\n]{0,30}/) || [''])[0]`));
 await post('/gm-crew', { user_id: idOf(crew.driver), name: crew.driver + ' T', text: 'picked jester' });
 await sleep(1500);
 st = await call('getState', [false]);
 console.log('after "picked jester":', await row(223));
-await ev(`document.querySelectorAll('.sheet-close, [aria-label=Close], button').forEach(b => { if (b.textContent.trim() === '✕') b.click(); }), 1`);
+await ev(`${F}.document.querySelectorAll('button').forEach(b => { if (b.textContent.trim() === '✕') b.click(); }), 1`);
 await sleep(1500); await shot('c2.png');
+
+// Pop out: the panel moves into its own window and still works; closing the window brings it back
+await send('Runtime.evaluate', { expression: `document.getElementById('swcPop').click()`, userGesture: true });
+await sleep(6000);
+const pages = (await (await fetch('http://localhost:9337/json/list')).json()).filter(t => t.type === 'page');
+const popT = pages.find(t => t.url === 'about:blank' || /SURE Walk/.test(t.title));
+console.log('pop-out window opened:', !!popT, '| side panel says:', JSON.stringify(await ev(`document.body.innerText.slice(0, 60)`)));
+if (popT) {
+  const pw = new WebSocket(popT.webSocketDebuggerUrl); await new Promise(r => { pw.onopen = r; });
+  let pid = 0; const pp = {};
+  pw.onmessage = e => { const m = JSON.parse(e.data); if (pp[m.id]) { pp[m.id](m.result); delete pp[m.id]; } };
+  const pev = x => new Promise(r => { pp[++pid] = r; pw.send(JSON.stringify({ id: pid, method: 'Runtime.evaluate', params: { expression: x, awaitPromise: true, returnByValue: true } })); }).then(r => r.result && r.result.value);
+  console.log('window shows the panel:', await pev(`!!document.querySelector('#newBuild')`), '| call from the window:',
+    await pev(`new Promise(ok => google.script.run.withSuccessHandler(s => ok('pending ' + s.pending.length + ', crews ' + s.crews.length)).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`));
+  await pev('window.close(), 1');
+  await sleep(2000);
+  console.log('after closing the window, back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));
+}
 console.log(logs.join('\n') || 'no page errors');
 process.exit(0);

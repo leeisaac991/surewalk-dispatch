@@ -16,6 +16,11 @@ assign / at / picked / take off / move / cancel / undo, picked colors, GroupMe s
 
 Each dispatcher sets this up once in their own browser. Their settings, crew edits and GroupMe login stay there.
 
+**More room:** press **⧉ Pop out** (the orange strip at the top of the side panel) to open the panel in its own
+window. Resize it, maximize it, or move it to another screen. Keep the Excel side panel open, because it's the
+window's connection to the sheet. Close the window (or press **Bring it back here**) to return to the side panel. If
+the browser blocks the window, allow pop-ups for Excel (the icon at the right of the address bar).
+
 ## How it works
 - `host.js` stands in for `google.script.run`. Before each panel call it reads the rides tab with Office.js and
   presents it in the old Google-sheet column layout, so the original code runs unchanged:
@@ -25,6 +30,9 @@ Each dispatcher sets this up once in their own browser. Their settings, crew edi
 - `backend.js` = `services.js` (stand-ins for Google's services: properties in this browser, GroupMe through the
   browser) + the original `Places/Crews/GroupMe/Code/Excel.gs` + `worker-entry.js`. It runs in a Web Worker, so
   GroupMe calls never freeze the panel.
+- **Clock:** Apps Script ran on Google's servers. Here "now" comes from the dispatcher's computer, corrected forward
+  if GroupMe's timestamps show the computer is behind. Otherwise a crew that just said "empty" would stay "available"
+  after being assigned.
 - **Copied highlights:** Excel gives a new form response the formatting of the row above. A new ride that nobody has
   touched yet (no dispatcher, call time, arrival, crew or reason) and that has exactly the row above's color gets that
   color cleared, for rides from the last hour only.

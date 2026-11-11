@@ -60,7 +60,7 @@
   window.__xl = { writes, text: (r, c) => text(cell(r - 1, colN(c) - 1)), bg: (r, c) => cell(r - 1, colN(c) - 1).bg, fc: (r, c) => cell(r - 1, colN(c) - 1).fc,
     type(r, vals) { vals.forEach((s, j) => Object.assign(cell(r - 1, j), typed(s))); }, paint(r, color) { for (let j = 0; j < W; j++) cell(r - 1, j).bg = color; } };
   // the test clock, here and in the worker
-  const RealDate = Date, T0 = CONF.now, R0 = RealDate.now();
+  const RealDate = Date, T0 = CONF.now - (CONF.skew || 0), R0 = RealDate.now(); // skew: this computer's clock runs behind GroupMe's
   window.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [T0 + RealDate.now() - R0])); } static now() { return T0 + RealDate.now() - R0; } };
   const clock = `(() => { const R = Date, T0 = ${T0}, R0 = R.now() - ${RealDate.now() - R0}; self.Date = class extends R { constructor(...a) { super(...(a.length ? a : [T0 + R.now() - R0])); } static now() { return T0 + R.now() - R0; } }; })();\n`;
   window.__SWC = { backend: clock + get('/dist/backend.js'), sidebar: get('/dist/Sidebar.html') };

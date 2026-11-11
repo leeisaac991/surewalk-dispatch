@@ -2,6 +2,23 @@
 
 const __SW = { script: {}, changed: false };
 
+const __clock = { offset: 0 };
+(() => {
+  const RD = Date;
+  class D extends RD {
+    constructor(...a) { if (a.length) super(...a); else super(RD.now() + __clock.offset); }
+    static now() { return RD.now() + __clock.offset; }
+  }
+  self.Date = D;
+  __clock.learn = text => {
+    let max = 0;
+    String(text).replace(/"created_at":\s*(\d{9,11})/g, (m, s) => { if (+s > max) max = +s; return m; });
+    if (!max) return;
+    const behind = max * 1000 - RD.now();
+    if (behind > 1000 && behind + 1500 > __clock.offset) __clock.offset = Math.min(behind + 1500, 6 * 3600e3);
+  };
+})();
+
 function __store(obj) {
   const S = {
     getProperty: k => (Object.prototype.hasOwnProperty.call(obj(), k) ? obj()[k] : null),
@@ -50,6 +67,7 @@ const UrlFetchApp = {
     try { x.send(opts.payload == null ? null : opts.payload); } catch (e) { throw new Error('Network error: ' + (e.message || e)); }
     if (x.status === 0) throw new Error('Network error (no response)');
     if (!opts.muteHttpExceptions && x.status >= 400) throw new Error(`Request failed for ${url} returned code ${x.status}`);
+    if (x.status < 300) __clock.learn(x.responseText);
     return { getResponseCode: () => x.status, getContentText: () => x.responseText, getHeaders: () => ({}) };
   },
 };

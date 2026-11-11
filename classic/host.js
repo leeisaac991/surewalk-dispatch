@@ -292,39 +292,76 @@
   }
   function hash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); }
 
-  // google.script.run as the original page uses it
+  /* ---------------- the original page: in the side panel, or popped out into its own window ---------------- */
+  // Each copy of the page (a frame in the side panel, or the pop-out window) gets this small stand-in for
+  // google.script.run that hands every call to this host — the only place that talks to Excel.
+  const SHIM = `<script>(function () {
+  var H = null;
+  try { H = (window.parent !== window ? window.parent : window.opener).SWC_HOST; } catch (e) { /* no host */ }
+  function gone() {
+    document.body.innerHTML = '<div style="font:15px Segoe UI,system-ui,sans-serif;padding:24px;max-width:520px">' +
+      '<h3>SURE Walk Dispatch</h3><p>The panel in Excel was closed or reloaded, so this window lost its connection to the sheet.</p>' +
+      '<p>In Excel, open <b>Script Lab \\u25B8 Run</b> again, then press <b>\\u29C9 Pop out</b>.</p></div>';
+  }
   function runner(ok, fail) {
-    return new Proxy({}, {
-      get(_, name) {
-        if (name === 'withSuccessHandler') return h => runner(h, fail);
-        if (name === 'withFailureHandler') return h => runner(ok, h);
-        if (name === 'withUserObject') return () => runner(ok, fail);
-        if (typeof name !== 'string' || name === 'then') return undefined;
-        return (...a) => { rpc(name, a).then(r => ok && ok(r), e => fail && fail(e instanceof Error ? e : new Error(String(e)))); };
-      },
-    });
+    return new Proxy({}, { get: function (_, name) {
+      if (name === 'withSuccessHandler') return function (h) { return runner(h, fail); };
+      if (name === 'withFailureHandler') return function (h) { return runner(ok, h); };
+      if (name === 'withUserObject') return function () { return runner(ok, fail); };
+      if (typeof name !== 'string' || name === 'then') return undefined;
+      return function () {
+        var args = JSON.parse(JSON.stringify(Array.prototype.slice.call(arguments))), p;
+        try { p = H.call(name, args); } catch (e) { gone(); return; }
+        p.then(function (r) { if (ok) ok(r == null ? r : JSON.parse(JSON.stringify(r))); },
+               function (e) { if (fail) fail(new Error((e && e.message) || String(e))); });
+      };
+    } });
   }
-
-  /* ---------------- the original page ---------------- */
-  function inject(html) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    doc.querySelectorAll('base').forEach(b => b.remove());
-    document.body.innerHTML = '';
-    const run = s => { const n = document.createElement('script'); Array.from(s.attributes).forEach(a => n.setAttribute(a.name, a.value)); n.textContent = s.textContent; return n; };
-    Array.from(doc.head.childNodes).forEach(n => document.head.appendChild(n.nodeName === 'SCRIPT' ? run(n) : document.importNode(n, true)));
-    Array.from(doc.body.attributes).forEach(a => document.body.setAttribute(a.name, a.value));
-    Array.from(doc.body.childNodes).forEach(n => {
-      if (n.nodeName === 'SCRIPT') { document.body.appendChild(run(n)); return; }
-      const copy = document.importNode(n, true);
-      (copy.querySelectorAll ? Array.from(copy.querySelectorAll('script')) : []).forEach(s => s.replaceWith(run(s)));
-      document.body.appendChild(copy);
-    });
-  }
-  // "New version available — Reload" pointed at the Google web app: reload this panel instead.
-  document.addEventListener('click', e => {
-    const a = e.target && e.target.closest && e.target.closest('a[href*="script.google.com/macros"]');
-    if (a) { e.preventDefault(); location.reload(); }
+  window.google = { script: { run: runner(null, null), host: { close: function () {}, setHeight: function () {}, setWidth: function () {} },
+    url: { getLocation: function (cb) { cb({ hash: '', parameter: {}, parameters: {} }); } } } };
+  document.addEventListener('click', function (e) { // "New version available — Reload": reload the panel in Excel
+    var a = e.target && e.target.closest && e.target.closest('a[href*="script.google.com/macros"]');
+    if (a) { e.preventDefault(); try { H.reload(); } catch (x) { gone(); } }
   }, true);
+  if (!H) document.addEventListener('DOMContentLoaded', gone);
+})();<\/script>`;
+  const pageHtml = () => SWC.sidebar.replace(/<base[^>]*>/i, '').replace(/<head>/i, '<head>' + SHIM);
+
+  const BAR = 30; // the strip above the panel in Excel, with the Pop out button
+  const barStyle = `position:fixed;top:0;left:0;right:0;height:${BAR}px;display:flex;align-items:center;gap:8px;padding:0 10px;` +
+    'background:#bf5700;color:#fff;font:600 13px Segoe UI,system-ui,sans-serif;z-index:5;box-sizing:border-box';
+  const btnStyle = 'border:0;border-radius:99px;padding:3px 12px;background:#fff;color:#bf5700;font:600 12px Segoe UI,system-ui,sans-serif;cursor:pointer';
+  let popup = null, watch = null;
+
+  function showInPane() {
+    document.body.style.margin = '0';
+    document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span><span style="flex:1"></span>
+      <button id="swcPop" style="${btnStyle}" title="Open the panel in its own window: resize it, maximize it, or move it to another screen">⧉ Pop out</button></div>
+      <iframe id="swcFrame" title="SURE Walk Dispatch" style="position:fixed;top:${BAR}px;left:0;width:100%;height:calc(100% - ${BAR}px);border:0"></iframe>`;
+    document.getElementById('swcFrame').srcdoc = pageHtml();
+    document.getElementById('swcPop').onclick = popOut;
+  }
+  function popOut() {
+    const w = window.open('', 'surewalk_dispatch', 'popup=yes,width=1280,height=900');
+    if (!w) { alert('The browser blocked the new window. Allow pop-ups for Excel (the icon at the right of the address bar), then press Pop out again.'); return; }
+    try {
+      w.document.open(); w.document.write(pageHtml()); w.document.close();
+      w.document.title = 'SURE Walk Dispatch';
+    } catch (e) { alert("Couldn't open the panel in its own window here: " + e.message); try { w.close(); } catch (x) { /* gone */ } return; }
+    popup = w;
+    // one copy of the panel at a time: the side panel steps aside while the window is open
+    document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span></div>
+      <div style="padding:${BAR + 18}px 18px 18px;font:14px Segoe UI,system-ui,sans-serif;color:#333">
+        <p style="margin:0 0 12px"><b>The panel is open in its own window.</b><br>Keep this side panel open: it's the window's connection to the sheet.</p>
+        <button id="swcFocus" style="${btnStyle};border:1px solid #bf5700;margin-right:6px">Show the window</button>
+        <button id="swcBack" style="${btnStyle};border:1px solid #bf5700">Bring it back here</button></div>`;
+    document.getElementById('swcFocus').onclick = () => { try { popup.focus(); } catch (e) { /* closed */ } };
+    document.getElementById('swcBack').onclick = () => { try { popup.close(); } catch (e) { /* closed */ } };
+    clearInterval(watch);
+    watch = setInterval(() => { if (!popup || popup.closed) { clearInterval(watch); popup = null; showInPane(); } }, 700);
+  }
+  // reloading the panel in Excel ends the window's connection, so the window closes with it
+  window.addEventListener('beforeunload', () => { try { if (popup) popup.close(); } catch (e) { /* gone */ } });
 
   function problem(msg) {
     document.body.innerHTML = `<div style="font:14px Segoe UI,system-ui,sans-serif;padding:16px;max-width:460px">
@@ -339,13 +376,13 @@
       cache = null; dirty = true;
       await readSheet(); // checks the tab and its columns before showing the panel
       if (!worker && !direct) startBackend();
-      window.google = { script: { run: runner(null, null), host: { close() {}, setHeight() {}, setWidth() {} },
-        url: { getLocation(cb) { cb({ hash: '', parameter: {}, parameters: {} }); } } } };
-      inject(SWC.sidebar);
+      if (popup && !popup.closed) return; // already showing in its own window
+      showInPane();
     } catch (e) {
       problem(e && e.code === 'ItemNotFound' ? `There's no tab named "${conf.sheet}".` : (e.message || String(e)));
     }
   }
-  window.SWC_HOST = { readSheet, virtualSnap, toExcelOps, rpc, get props() { return props; } }; // console / tests
+  window.SWC_HOST = { call: (fn, args) => rpc(fn, args), reload: () => location.reload(), popOut, // used by the panel page(s)
+    readSheet, virtualSnap, toExcelOps, rpc, get props() { return props; } }; // console / tests
   Office.onReady(() => start());
 })();
