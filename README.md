@@ -1,16 +1,18 @@
 # SURE Walk Dispatch panel
 
-A simple dispatch panel for the SURE Walk rides workbook in Excel on the web: assign crews, at, picked, take off,
+The SURE Walk dispatch panel for the rides workbook in Excel on the web: assign crews, at, picked, take off,
 cancel, duplicate, edit and undo, with ride messages posted to GroupMe. The same code runs three ways:
 
 | Way | Folder | Needs |
 |---|---|---|
-| **Script Lab snippet** (easiest) | `excel-addin/scriptlab/SURE-Walk-Dispatch.yaml` | the free Script Lab add-in in Excel |
+| **Original panel in Script Lab** (recommended) | `classic/` — see [classic/README.md](classic/README.md) | the free Script Lab add-in in Excel |
+| Simple panel in Script Lab | `excel-addin/scriptlab/SURE-Walk-Dispatch.yaml` | the free Script Lab add-in in Excel |
 | Excel add-in (own Home-tab button) | `excel-addin/` (`build.sh`, `publish.sh`) | the files hosted on HTTPS |
 | Microsoft Edge side panel | `edge-extension/` | a Microsoft (Entra) app registration |
 
 ## Script Lab
-**Snippet (public gist):** https://gist.github.com/leeisaac991/797e865d8e0bc875907aca9f2c645a62
+**Snippet (public gist):** https://gist.github.com/leeisaac991/797e865d8e0bc875907aca9f2c645a62 — this is the
+**original panel** (`classic/`). The simple panel's snippet is `excel-addin/scriptlab/SURE-Walk-Dispatch.yaml`.
 
 In Excel on the web, open the rides workbook ▸ **Home ▸ Add-ins** ▸ add **Script Lab** ▸ **Script Lab ▸ Code ▸ ☰ ▸
 Import** ▸ paste the gist link above (or the YAML) ▸ **Import** ▸ **Script Lab ▸ Run**. Then **⚙ Settings**: your name,
