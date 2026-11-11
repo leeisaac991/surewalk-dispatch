@@ -51,6 +51,8 @@ http.createServer((req, res) => {
     if (req.method === 'POST' && u === '/gm-like') { const b = JSON.parse(body), m = gm.msgs.find(x => x.id === b.id); if (m) m.favorited_by.push(b.user_id); return send(200, {}); }
     if (u === '/sheet.json') return send(200, fs.readFileSync(EXPORT));
     if (u === '/config.json') return send(200, { now: NOW, paint: JSON.parse(process.env.PAINT || '[]') });
+    // /?snippet: only the fake Excel — the Script Lab snippet's loader is run on it (it downloads the panel itself)
+    if (u === '/?snippet') return send(200, '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script src="/fake-excel.js"></script></body></html>', 'text/html');
     if (u === '/') return send(200, '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><script src="/fake-excel.js"></script><script src="/dist/host.js"></script></body></html>', 'text/html');
     if (u === '/fake-excel.js') return send(200, fs.readFileSync(path.join(HERE, 'fake-excel.js')), 'text/javascript');
     if (u.startsWith('/dist/')) {
