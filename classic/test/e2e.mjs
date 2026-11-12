@@ -43,6 +43,13 @@ const p2 = st.pending.find(x => x.row === 225), ref2 = { row: p2.row, id: p2.id 
 const c2 = await act('cancelRide', [ref2, 'Not Answering']);
 console.log('cancel 225 ->', ok(c2), await row(225));
 console.log('undo ->', ok(await act('undoAction', [c2.undo])), await row(225));
+// ✎ Edit ride: name / pickup / drop-off go into J, K, M, N of the Excel sheet; undo puts them back
+const names = r => ev(`JSON.stringify(['J','K','M','N'].map(c => __xl.text(${r}, c)))`);
+console.log('before edit 225:', await names(225));
+const ed = await act('editRide', [ref2, { first: 'Kat', last: 'Fixed', pickup: 'Kendra Scott Center', dropoff: 'Jester' }]);
+const edited = ed.state && ed.state.pending.find(x => x.row === 225);
+console.log('edit 225 ->', ok(ed), await names(225), '| panel shows', edited && `${edited.first} ${edited.pickup} → ${edited.dropoff} (zone ${edited.zone})`);
+console.log('undo edit ->', ok(await act('undoAction', [ed.undo])), await names(225));
 
 // GroupMe: sign in, pick the chat, sync on
 const members = (await (await fetch(BASE + '/gm/groups/G1')).json()).response.members, idOf = n => (members.find(m => m.nickname === n) || {}).user_id;

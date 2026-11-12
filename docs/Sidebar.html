@@ -429,6 +429,10 @@
   .ask-text { background: var(--card); border-radius: 14px; padding: 16px; text-align: center; font-size: 14px; color: var(--label2); }
   .ask-btn { width: 100%; padding: 14px; border-radius: 14px; background: var(--card); font-size: 17px; font-weight: 600; }
   .ask-btn.danger { color: var(--red); }
+  .ask-extra { display: grid; gap: 8px; background: var(--card); border-radius: 14px; padding: 12px 14px; }
+  .ask-extra:empty { display: none; }
+  .ask-extra label { display: grid; gap: 3px; font-size: 12px; color: var(--label2); text-align: left; }
+  .ask-extra input { font: inherit; font-size: 15px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sep); background: var(--fill); color: var(--text); min-width: 0; }
   .ask-btn.cancel { color: var(--accent); }
   .ask-row { display: flex; flex-direction: column-reverse; gap: 8px; } 
   
@@ -718,6 +722,7 @@
 <div id="askSheet" class="ask-bg" hidden onclick="if (event.target === this) answer(false)">
   <div class="ask">
     <div id="askText" class="ask-text"></div>
+    <div id="askExtra" class="ask-extra"></div>
     <div class="ask-row">
       <button class="ask-btn cancel" onclick="answer(false)">Cancel</button>
       <button id="askOk" class="ask-btn" onclick="answer(true)"></button>
@@ -1624,6 +1629,7 @@
       <button class="danger" onclick="cancel(${r.row})">Cancel ride</button>
       ${selected.size > 1 ? `<span class="muted" style="color:var(--red)">${selected.size} rides selected — select only one ride to cancel</span>` : ''}
       <button onclick="dup(${r.row})">Duplicate</button>
+      ${!r.picked ? `<button onclick="editRide(${r.row})" title="Fix the rider's name, pick-up or drop-off in the sheet">✎ Edit ride</button>` : ''}
       ${r.ada && !r.picked ? `<button onclick="notAda(${r.row})" title="They don't need ADA after all (we texted or called them): ADA becomes No in the sheet">♿ Not ADA</button>` : ''}
     </div>`;
   }
@@ -2042,6 +2048,24 @@
     await doAct('markNotAda', [refOfRow(row)], s => { s.pending.concat(s.active).forEach(r => { if (r.row === row) r.ada = false; }); });
     status('Row ' + row + ' is no longer ADA.');
   }
+
+  async function editRide(row) {
+    const r = state.pending.concat(state.active).find(x => x.row === row);
+    if (!r) return;
+    openMenus.delete(row);
+    const field = (id, label, v) => `<label>${label}<input id="${id}" value="${esc(v || '')}" autocomplete="off"></label>`;
+    const html = field('edFirst', 'First name', r.first) + field('edLast', 'Last name', r.last) +
+      field('edPickup', 'Pick-up', r.pickup) + field('edDropoff', 'Drop-off', r.dropoff);
+    if (!(await ask(`Edit row ${row}`, 'Save', false, html))) return;
+    const v = id => ($(id) ? $(id).value.trim() : '');
+    const f = { first: v('edFirst'), last: v('edLast'), pickup: v('edPickup'), dropoff: v('edDropoff') };
+    if (!f.first || !f.pickup || !f.dropoff) return status("Name, pick-up and drop-off can't be empty — nothing was changed.", true);
+    if (f.first === r.first && f.last === (r.last || '') && f.pickup === r.pickup && f.dropoff === r.dropoff) return;
+    await doAct('editRide', [refOfRow(row), f], s => {
+      s.pending.concat(s.active).forEach(x => { if (x.row === row) Object.assign(x, f, f.pickup !== r.pickup ? { pickupName: f.pickup } : {}); });
+    });
+    status(`Row ${row} updated.`);
+  }
   const reasonPick = {};
   async function cancel(row) {
     const reason = ($('reason' + row) && $('reason' + row).value) || reasonPick[row] || '';
@@ -2087,8 +2111,9 @@
   }
 
   let askResolve = null;
-  function ask(text, okLabel, danger) {
+  function ask(text, okLabel, danger, extraHtml) {
     $('askText').textContent = text;
+    $('askExtra').innerHTML = extraHtml || '';
     $('askOk').textContent = okLabel || 'OK';
     $('askOk').className = 'ask-btn' + (danger ? ' danger' : '');
     reveal($('askSheet'));
@@ -2100,6 +2125,8 @@
       box.style.top = Math.max(m, Math.min(innerHeight - h - m, y - h / 2)) + 'px';
       try { $('askOk').focus({ preventScroll: true }); } catch (e) {   }
     }
+    const firstField = $('askExtra').querySelector('input');
+    if (firstField) { try { firstField.focus({ preventScroll: true }); firstField.select(); } catch (e) {   } }
     return new Promise(res => { askResolve = res; });
   }
 
@@ -2848,7 +2875,7 @@ show();
       assignRides: () => `Assigned ${n(a[0])} ride${n(a[0]) > 1 ? 's' : ''} to ${[a[1].driver, a[1].nav].filter(Boolean).join(' / ')}`,
       markArrived: () => `Marked ${n(a[0])} at`, markPicked: () => `Picked ${n(a[0])} rider${n(a[0]) > 1 ? 's' : ''}`,
       cancelRide: () => `Cancelled row ${a[0].row}`, markDuplicate: () => `Marked row ${a[0].row} duplicate`,
-      markNotAda: () => `Marked row ${a[0].row} not ADA`,
+      markNotAda: () => `Marked row ${a[0].row} not ADA`, editRide: () => `Edited row ${a[0].row}`,
       restoreRide: () => 'Restored a ride', setCrewStatus: () => `${crewName(a[0])} marked ${a[1] === 'available' ? 'empty' : 'busy'}`,
       saveCrew: () => 'Saved crew', removeCrews: () => `Removed ${n(a[0])} crew${n(a[0]) > 1 ? 's' : ''}`,
       setCrewState: () => `${crewName(a[0])} ${a[1] === 'break' ? 'on break' : a[1] === 'gas' ? 'sent to gas' : a[1] === 'off' ? 'off shift' : 'back on'}`,

@@ -517,7 +517,7 @@ function offCampusPickup_(pickup) {
 
 let CAMPUS_PHRASES_ = null;
 const SHORT_OK_ = new Set(['bsom', 'pcl', 'sac', 'sjc', 'j1', 'j2', 'ua9', 'fac', 'gdc', 'eer', 'wcp', 'sjh', 'rlm', 'pma', 'ecj', 'glt', 'kin', 'utc', 'mai', 'unb', 'cma', 'hrc', 'lbj',
-  'brg', 'ccg', 'ecg', 'gug', 'hcg', 'mag', 'rhg', 'sag', 'sjg', 'swg', 'trg', 'tsg', 'dhg', 'dkr']);
+  'brg', 'ccg', 'ecg', 'gug', 'hcg', 'mag', 'rhg', 'sag', 'sjg', 'swg', 'trg', 'tsg', 'dhg', 'dkr', 'ksc']);
 function mentionsCampusPlace_(text) {
   if (!CAMPUS_PHRASES_) {
     CAMPUS_PHRASES_ = [];
@@ -623,6 +623,7 @@ const CAMPUS_MAP = [
   ['', 'Music Building and Recital Hall', 'Butler School of Music', 'bates recital hall', 'bates hall'], ['', 'Waggener Hall', '', 'wagner hall', 'waggener'],
   ['', 'Homer Rainey Hall', '', 'rainey hall'], ['', 'DKR-Texas Memorial Stadium', 'DKR Stadium', 'drk'],
   ['', 'Creekside Residence Hall', 'Creekside', 'waller creek', 'waller creek residence halls'], ['', 'Union Building', 'Texas Union', 'texas union on 24th', 'union on 24th st'],
+  ['KSC', 'Kendra Scott Center', '', 'kendra scott', 'kendra scott centre', 'the kendra scott center'],
 
   ['BRG', 'Brazos Garage'], ['CCG', 'Conference Center Garage'], ['ECG', 'East Campus Garage'], ['GUG', 'Guadalupe Garage'],
   ['HCG', 'Health Center Garage'], ['MAG', 'Manor Garage'], ['RHG', 'Rowling Hall Garage'], ['SAG', 'San Antonio Garage'],
@@ -2729,7 +2730,7 @@ function getStateCore_(fast) {
 
 function act(name, args) {
 
-  const actions = { assignRides, unassignRides, moveRides, markArrived, markPicked, cancelRide, markDuplicate, markNotAda, setCrewStatus, setCrewState, restoreRide,
+  const actions = { assignRides, unassignRides, moveRides, markArrived, markPicked, cancelRide, markDuplicate, markNotAda, editRide, setCrewStatus, setCrewState, restoreRide,
     saveCrew, removeCrews, setTonightColor, toggleShift, dismissChat, setSyncRunning, clearGroupMeLog,
     saveGroupMeToken, setGroupMeGroup, forgetGroupMeToken, undoAction };
   if (!Object.prototype.hasOwnProperty.call(actions, name)) throw new Error(`Unknown action "${name}" — re-paste all files.`);
@@ -3130,6 +3131,21 @@ function markNotAda(ref) {
   });
 }
 
+const EDIT_FIELDS_ = { first: COL.FIRST, last: COL.LAST, pickup: COL.PICKUP, dropoff: COL.DROPOFF };
+function editRide(ref, fields) {
+  withLock_(() => {
+    const sh = sheet_(), row = resolveRows_(sh, [ref])[0], f = fields || {};
+    assertEditable_(sh, row);
+    Object.keys(EDIT_FIELDS_).forEach(k => {
+      if (!(k in f)) return;
+      const v = String(f[k] == null ? '' : f[k]).replace(/^[=+@]+/, '').trim().slice(0, 200);
+      if (!v && k !== 'last') throw new Error(`The ${k === 'first' ? 'first name' : k} can't be empty.`);
+      const cell = sh.getRange(row, EDIT_FIELDS_[k]);
+      if (String(cell.getDisplayValue()).trim() !== v) cell.setValue(v);
+    });
+  });
+}
+
 function cancelRide(ref, reason) {
   withLock_(() => {
     const sh = sheet_();
@@ -3163,6 +3179,7 @@ const UNDOABLE_ = {
   cancelRide:    { rows: a => [a[0]] },
   markDuplicate: { rows: a => [a[0]] },
   markNotAda:    { rows: a => [a[0]] },
+  editRide:      { rows: a => [a[0]] },
   restoreRide:   { rows: a => [a[0]] },
   setCrewStatus: { people: a => String(a[0]).split('|') },
   saveCrew:      { crewEdits: true },
