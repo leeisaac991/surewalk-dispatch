@@ -16,6 +16,8 @@
   const READ_COLS = 30;     // Excel columns read (A:AD)
   const VW = 26;            // columns the original code sees (A:Z of the old layout)
   const SCAN_ROWS = 600, FIND_ROWS = 1000, MAX_AGE_MS = 8000;
+  const BATCH_ROWS = 100;   // rows per read (Excel on the web limits each answer to ~5 MB)
+  const ROSTER_ROWS = 400;  // read at most this far below the last ride (the roster block)
 
   /* ---------------- this browser's settings and the panel's saved state ---------------- */
   const ls = {
@@ -107,26 +109,28 @@
       L.lastRide = 1;
       for (let i = tsCol.text.length - 1; i >= 0; i--) if (aTop + i > 1 && /\d{1,2}:\d{2}/.test(tsCol.text[i][0])) { L.lastRide = aTop + i; break; }
       const top = Math.max(2, L.lastRide - SCAN_ROWS + 1);
+      const end = Math.min(lastRow, L.lastRide + ROSTER_ROWS); // the roster block sits right under the rides
+      // Excel on the web refuses answers over ~5 MB, so the rows are read in batches (a few thousand cells each).
       const parts = [{ r: 1, n: 1 }];
-      if (lastRow >= top) parts.push({ r: top, n: lastRow - top + 1 });
-      const loaded = parts.map(p => {
+      for (let r = top; r <= end; r += BATCH_ROWS) parts.push({ r, n: Math.min(BATCH_ROWS, end - r + 1) });
+      const cells = {}; // row -> array of Excel cells {t, v, f, fmt, bg, fc}
+      for (const p of parts) {
         const rg = ws.getRangeByIndexes(p.r - 1, 0, p.n, READ_COLS);
         rg.load('values,text,formulas,numberFormat');
-        return { p, rg, props: rg.getCellProperties({ format: { fill: { color: true }, font: { color: true } } }) };
-      });
-      await ctx.sync();
-      const cells = {}; // row -> array of Excel cells {t, v, f, fmt, bg, fc}
-      loaded.forEach(({ p, rg, props: pr }) => {
+        const pr = rg.getCellProperties({ format: { fill: { color: true }, font: { color: true } } });
+        await ctx.sync();
         for (let i = 0; i < p.n; i++) {
           const line = [];
           for (let j = 0; j < READ_COLS; j++) {
             const c = pr.value[i][j].format;
-            line.push({ t: rg.text[i][j] == null ? '' : String(rg.text[i][j]), v: rg.values[i][j], f: rg.formulas[i][j], fmt: rg.numberFormat[i][j],
+            let t = rg.text[i][j] == null ? '' : String(rg.text[i][j]);
+            if (t.length > 300) t = t.slice(0, 300); // e.g. a "#####…" cell
+            line.push({ t, v: rg.values[i][j], f: rg.formulas[i][j], fmt: rg.numberFormat[i][j],
               bg: String((c.fill && c.fill.color) || '#ffffff').toLowerCase(), fc: String((c.font && c.font.color) || '#000000').toLowerCase() });
           }
           cells[p.r + i] = line;
         }
-      });
+      }
       return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells };
     });
     await clearCopiedColors(got);

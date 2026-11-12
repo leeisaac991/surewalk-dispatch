@@ -39,7 +39,7 @@
       }; }
     each(fn) { for (let i = 0; i < this.h; i++) for (let j = 0; j < this.w; j++) fn(cell(this.r + i, this.c + j), i, j); }
     grid(fn) { const o = []; for (let i = 0; i < this.h; i++) { const l = []; for (let j = 0; j < this.w; j++) l.push(fn(cell(this.r + i, this.c + j))); o.push(l); } return o; }
-    load() { return this; }
+    load(props) { pendingLoads.push(() => String(props || '').split(',').map(p => JSON.stringify(this[p.trim()] || '')).join('').length); return this; }
     get values() { return this.grid(x => x.v); }
     set values(g) { this.each((x, i, j) => { const t = typeof g[i][j] === 'string' ? typed(g[i][j]) : { v: g[i][j], fmt: x.fmt }; x.v = t.v; if (x.fmt === 'General' || typeof g[i][j] === 'string') x.fmt = t.fmt === 'General' && typeof x.v === 'number' && x.fmt !== 'General' ? x.fmt : t.fmt; }); writes.push(`${this.a}=${JSON.stringify(g)}`); }
     get text() { return this.grid(text); }
@@ -47,7 +47,7 @@
     get numberFormat() { return this.grid(x => x.fmt); }
     set numberFormat(g) { this.each((x, i, j) => { x.fmt = g[i][j]; }); }
     clear() { this.each(x => { x.v = ''; }); writes.push(`${this.a} cleared`); }
-    getCellProperties() { return { value: this.grid(x => ({ format: { fill: { color: x.bg }, font: { color: x.fc } } })) }; }
+    getCellProperties() { const v = { value: this.grid(x => ({ format: { fill: { color: x.bg }, font: { color: x.fc } } })) }; pendingLoads.push(() => JSON.stringify(v).length); return v; }
   }
   const lastRow = () => { for (let r = grid.length; r > 0; r--) if (grid[r - 1].some(x => x.v !== '')) return r; return 0; };
   const ws = { name: 'Sheet1', load() {},
@@ -55,7 +55,15 @@
     getRange(a) { const m = /^(\d+):(\d+)$/.exec(a); return new Rng(+m[1] - 1, 0, m[2] - m[1] + 1, W, a); },
     getUsedRangeOrNullObject() { return { isNullObject: false, rowIndex: 0, rowCount: lastRow(), load() {} }; } };
   const workbook = { name: 'Sure Walk Fall 2026.xlsx', load() {}, worksheets: { getFirst: () => ws, getItem: () => ws } };
-  window.Excel = { run: async fn => fn({ workbook, sync: async () => {} }), ClearApplyTo: { contents: 'Contents' } };
+  // Like Excel on the web: one sync's answer may not exceed ~5 MB.
+  const pendingLoads = [];
+  window.__xlMaxSync = 0;
+  const sync = async () => {
+    const size = pendingLoads.splice(0).reduce((s, f) => s + f(), 0);
+    window.__xlMaxSync = Math.max(window.__xlMaxSync, size);
+    if (size > 5 * 1024 * 1024) throw Object.assign(new Error('The response payload size has exceeded the limit. Please refer to the documentation: https://docs.microsoft.com/office/dev/add-ins/concepts/resource-limits-and-rate-limiting#excel-add-ins.'), { code: 'ResponsePayloadSizeLimitExceeded' });
+  };
+  window.Excel = { run: async fn => fn({ workbook, sync }), ClearApplyTo: { contents: 'Contents' } };
   // Office, including a stand-in for Excel's dialog window: a test window whose messages go through the same calls
   const EventType = { DialogMessageReceived: 'dm', DialogEventReceived: 'de', DialogParentMessageReceived: 'dp' };
   const AsyncResultStatus = { Succeeded: 'succeeded', Failed: 'failed' };
