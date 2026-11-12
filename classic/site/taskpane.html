@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SURE Walk Dispatch</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>body { margin: 0; font: 14px "Segoe UI", system-ui, sans-serif; }</style>
+</head>
+<body>
+<div id="loading" style="padding:24px;color:#6e6e73">Loading SURE Walk Dispatch…</div>
+<script>
+  // The SURE Walk add-in's side panel: loads the panel (the original page + code) from this same site, then host.js.
+  // A test may provide window.__SWC itself.
+  window.__SWC_HOSTED = true; // Pop out uses Excel's dialog window (it needs the add-in's own site)
+  (async () => {
+    const get = async f => { const r = await fetch(f, { cache: 'no-cache' }); if (!r.ok) throw new Error(f + ' (' + r.status + ')'); return r.text(); };
+    try {
+      // every file is fetched fresh (never a stale browser copy), so a reopen always gets the newest panel
+      if (!window.__SWC) { const [backend, sidebar] = await Promise.all([get('backend.js'), get('Sidebar.html')]); window.__SWC = { backend, sidebar }; }
+      const s = document.createElement('script'); s.textContent = await get('host.js'); document.body.appendChild(s);
+    } catch (e) {
+      document.getElementById('loading').innerHTML = '<span style="color:#c62828">Could not load the panel: ' + e.message + '. Check the internet connection and reopen it.</span>';
+    }
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+name: SURE Walk Dispatch
+description: The SURE Walk dispatch panel (the original one), running on this Excel workbook. Build ee766f9.
+host: EXCEL
+api_set: {}
+script:
+  content: |
+    // @ts-nocheck
+    // Loads the panel from github.com/leeisaac991/surewalk-dispatch (folder classic/dist, commit ee766f9). Nothing to edit here.
+    const BASE = "https://cdn.jsdelivr.net/gh/leeisaac991/surewalk-dispatch@ee766f99c3a6be1b1271a7c9aa0feaf985edcf68/classic/dist/";
+    document.body.innerHTML = '<div style="font:14px Segoe UI,system-ui,sans-serif;padding:24px;color:#6e6e73">Loading SURE Walk Dispatch…</div>';
+    Promise.all(["backend.js", "Sidebar.html", "host.js"].map(f =>
+      fetch(BASE + f).then(r => { if (!r.ok) throw new Error(f + " (" + r.status + ")"); return r.text(); })))
+      .then(([backend, sidebar, host]) => { window.__SWC = { backend, sidebar }; (0, eval)(host); })
+      .catch(e => { document.body.innerHTML = '<p style="font:14px Segoe UI,system-ui,sans-serif;padding:24px;color:#c62828">Could not load the panel: ' + e.message + '. Check the internet connection and press Run again.</p>'; });
+  language: typescript
+template:
+  content: |
+    <div></div>
+  language: html
+style:
+  content: |
+    body { margin: 0; }
+  language: css
+libraries: |
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.js
+  @types/office-js
