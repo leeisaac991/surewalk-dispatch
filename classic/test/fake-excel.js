@@ -54,7 +54,14 @@
     getRangeByIndexes: (r, c, h, w) => new Rng(r, c, h, w),
     getRange(a) { const m = /^(\d+):(\d+)$/.exec(a); return new Rng(+m[1] - 1, 0, m[2] - m[1] + 1, W, a); },
     getUsedRangeOrNullObject() { return { isNullObject: false, rowIndex: 0, rowCount: lastRow(), load() {} }; } };
-  const workbook = { name: 'Sure Walk Fall 2026.xlsx', load() {}, worksheets: { getFirst: () => ws, getItem: () => ws } };
+  // An optional second tab, "Pairings" (the shift roster), read-only: /pairings.json (404 = no such tab)
+  const pq = new XMLHttpRequest(); pq.open('GET', '/pairings.json', false); pq.send();
+  const pairRaw = pq.status === 200 ? JSON.parse(pq.responseText) : null;
+  const pws = pairRaw && { name: 'Pairings', load() {},
+    getUsedRangeOrNullObject: () => ({ isNullObject: !pairRaw.length, rowIndex: 0, rowCount: pairRaw.length, load() {} }),
+    getRangeByIndexes: (r, c, h, w) => ({ load() {}, get text() { const o = []; for (let i = 0; i < h; i++) { const l = []; for (let j = 0; j < w; j++) l.push(String((pairRaw[r + i] || [])[c + j] || '')); o.push(l); } return o; } }) };
+  const workbook = { name: 'Sure Walk Fall 2026.xlsx', load() {},
+    worksheets: { items: [ws].concat(pws ? [pws] : []), load() {}, getFirst: () => ws, getItem: n => (pws && n === pws.name ? pws : ws) } };
   // Like Excel on the web: one sync's answer may not exceed ~5 MB.
   const pendingLoads = [];
   window.__xlMaxSync = 0;

@@ -17,14 +17,23 @@ const F = `document.getElementById('swcFrame').contentWindow`; // the panel page
 const call = (fn, args) => ev(`new Promise(ok => ${F}.google.script.run.withSuccessHandler(ok).withFailureHandler(e => ok('FAIL ' + e.message))[${JSON.stringify(fn)}](...${JSON.stringify(args || [])}))`);
 const act = (name, args) => call('act', [name, args]);
 const shot = async f => { if (!SHOTS) return; const s = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(`${SHOTS}/${f}`, Buffer.from(s.data, 'base64')); };
-const row = r => ev(`JSON.stringify({E: __xl.text(${r},'E'), F: __xl.text(${r},'F'), G: __xl.text(${r},'G'), PQRS: ['P','Q','R','S'].map(c => __xl.text(${r},c)).join('|'), X: __xl.text(${r},'X'), fill: __xl.bg(${r},'A'), fillZ: __xl.bg(${r},'AE'), font: __xl.fc(${r},'C')})`);
+// columns found by their header in row 1 (works for any rides-tab layout)
+const L = {};
+const colsOf = async () => { const hdr = await ev(`JSON.stringify(Array.from({ length: 30 }, (_, j) => __xl.text(1, String.fromCharCode(65 + (j >= 26 ? 0 : j)) + (j >= 26 ? String.fromCharCode(65 + j - 26) : ''))))`);
+  const h = JSON.parse(hdr).map(x => String(x).toLowerCase().trim()), letter = j => (j >= 26 ? 'A' + String.fromCharCode(65 + j - 26) : String.fromCharCode(65 + j));
+  const find = re => { const j = h.findIndex(x => re.test(x)); return j < 0 ? null : letter(j); };
+  Object.assign(L, { disp: find(/^dispatch/), call: find(/^call time/), arr: find(/^arrival/), loc: find(/^location$/), van: find(/^(van|vehicle)/), drv: find(/^driver$/), nav: find(/^navigator$/),
+    rsn: find(/^reason for cancel/), first: find(/^first name/), last: find(/^last name/), pu: find(/^pick ?-?up/), do: find(/^drop ?-?off/) }); };
+const row = r => ev(`JSON.stringify({disp: __xl.text(${r},'${L.disp}'), call: __xl.text(${r},'${L.call}'), arr: __xl.text(${r},'${L.arr}'), crew: ['${L.loc}','${L.van}','${L.drv}','${L.nav}'].map(c => __xl.text(${r},c)).join('|'), rsn: __xl.text(${r},'${L.rsn}'), fill: __xl.bg(${r},'A'), fillZ: __xl.bg(${r},'AE'), font: __xl.fc(${r},'C')})`);
 const ok = r => (typeof r === 'string' ? r : 'ok');
 const post = (path, b) => fetch(BASE + path, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
 
 await sleep(9000);
+const [RA, RC, RS, RT] = (process.env.ROWS || '226,225,223,224').split(',').map(Number); // assign, cancel/edit, GroupMe sync, a touched row
+await colsOf();
 console.log('panel up:', await ev(`!!${F}.document.querySelector('#newBuild') && !${F}.document.body.innerText.includes("Can't find")`), '| pop-out button:', await ev(`!!document.getElementById('swcPop')`));
-// copied highlight: rows 225/226 were painted like 224 (see PAINT) and are untouched -> cleared; 224 has a dispatcher -> kept
-console.log('copied colors: 224', await ev(`__xl.bg(224,'A')`), '225', await ev(`__xl.bg(225,'A')`), '226', await ev(`__xl.bg(226,'A')`));
+// copied highlight: rows RC/RA were painted like RT (see PAINT) and are untouched -> cleared; RT has a dispatcher -> kept
+console.log('copied colors:', RT, await ev(`__xl.bg(${RT},'A')`), RC, await ev(`__xl.bg(${RC},'A')`), RA, await ev(`__xl.bg(${RA},'A')`));
 let st = await call('getState', [true]);
 if (typeof st === 'string') { console.log(st); process.exit(1); }
 console.log('pending', st.pending.length, '| active', st.active.length, '| crews', st.crews.length, '| roster', JSON.stringify(st.rosterInfo));
@@ -32,24 +41,24 @@ await shot('c1.png');
 
 await call('setDispatcher', ['T. Tester']);
 console.log('color:', ok(await act('setTonightColor', ['#00ff00', 'A'])));
-const p = st.pending.find(x => x.row === 226), ref = { row: p.row, id: p.id };
+const p = st.pending.find(x => x.row === RA), ref = { row: p.row, id: p.id };
 const free = st.crews.filter(c => c.cap).sort((a, b) => (st.active.filter(r => r.driver === a.driver).length - st.active.filter(r => r.driver === b.driver).length));
 let crew = null;
 for (const c of free) { const r = await act('assignRides', [[ref], c, 'Auto', c.van]); if (typeof r !== 'string') { crew = c; break; } }
-console.log('assign 226 ->', crew && crew.driver + '/' + crew.nav, await row(226));
-console.log('arrived ->', ok(await act('markArrived', [[ref]])), await row(226));
-console.log('picked ->', ok(await act('markPicked', [[ref]])), await row(226));
-const p2 = st.pending.find(x => x.row === 225), ref2 = { row: p2.row, id: p2.id };
+console.log('assign ' + RA + ' ->', crew && crew.driver + '/' + crew.nav, await row(RA));
+console.log('arrived ->', ok(await act('markArrived', [[ref]])), await row(RA));
+console.log('picked ->', ok(await act('markPicked', [[ref]])), await row(RA));
+const p2 = st.pending.find(x => x.row === RC), ref2 = { row: p2.row, id: p2.id };
 const c2 = await act('cancelRide', [ref2, 'Not Answering']);
-console.log('cancel 225 ->', ok(c2), await row(225));
-console.log('undo ->', ok(await act('undoAction', [c2.undo])), await row(225));
+console.log('cancel ' + RC + ' ->', ok(c2), await row(RC));
+console.log('undo ->', ok(await act('undoAction', [c2.undo])), await row(RC));
 // ✎ Edit ride: name / pickup / drop-off go into J, K, M, N of the Excel sheet; undo puts them back
-const names = r => ev(`JSON.stringify(['J','K','M','N'].map(c => __xl.text(${r}, c)))`);
-console.log('before edit 225:', await names(225));
+const names = r => ev(`JSON.stringify(['${L.last}','${L.first}','${L.pu}','${L.do}'].map(c => __xl.text(${r}, c)))`);
+console.log('before edit ' + RC + ':', await names(RC));
 const ed = await act('editRide', [ref2, { first: 'Kat', last: 'Fixed', pickup: 'Kendra Scott Center', dropoff: 'Jester' }]);
-const edited = ed.state && ed.state.pending.find(x => x.row === 225);
-console.log('edit 225 ->', ok(ed), await names(225), '| panel shows', edited && `${edited.first} ${edited.pickup} → ${edited.dropoff} (zone ${edited.zone})`);
-console.log('undo edit ->', ok(await act('undoAction', [ed.undo])), await names(225));
+const edited = ed.state && ed.state.pending.find(x => x.row === RC);
+console.log('edit ' + RC + ' ->', ok(ed), await names(RC), '| panel shows', edited && `${edited.first} ${edited.pickup} → ${edited.dropoff} (zone ${edited.zone})`);
+console.log('undo edit ->', ok(await act('undoAction', [ed.undo])), await names(RC));
 
 // GroupMe: sign in, pick the chat, sync on
 const members = (await (await fetch(BASE + '/gm/groups/G1')).json()).response.members, idOf = n => (members.find(m => m.nickname === n) || {}).user_id;
@@ -61,9 +70,9 @@ await sleep(1500);
 st = await call('getState', [false]);
 const statusOf = s => ((s.board || []).find(b => b.key === crew.key) || {}).status;
 console.log('after "empty": crew is', statusOf(st));
-const p3 = st.pending.find(x => x.row === 223), ref3 = { row: p3.row, id: p3.id };
+const p3 = st.pending.find(x => x.row === RS), ref3 = { row: p3.row, id: p3.id };
 const a3 = await act('assignRides', [[ref3], crew, 'Auto', crew.van]);
-console.log('assign 223 ->', typeof a3 === 'string' ? a3 : 'ok', await row(223), '| crew is now', typeof a3 === 'string' ? '?' : statusOf(a3.state));
+console.log('assign ' + RS + ' ->', typeof a3 === 'string' ? a3 : 'ok', await row(RS), '| crew is now', typeof a3 === 'string' ? '?' : statusOf(a3.state));
 const msg = typeof a3 === 'string' ? '' : a3.result;
 const sent = await call('sendGroupMe', [msg + '\n@' + crew.driver, [], null]);
 console.log('ride post sent:', typeof sent === 'string' ? sent : 'ok');
@@ -72,14 +81,14 @@ await post('/gm-like', { id: postId, user_id: idOf(crew.driver) }); // the crew 
 await post('/gm-crew', { user_id: idOf(crew.driver), name: crew.driver + ' T', text: 'at jester' }); // and arrives
 await sleep(1500);
 st = await call('getState', [false]); // a full refresh syncs GroupMe
-console.log('after "at jester":', await row(223));
+console.log('after "at jester":', await row(RS));
 await sleep(21000); st = await call('getState', [false]); // reactions are re-read every 20 s
-console.log('heart on 223:', JSON.stringify(st.chat && st.chat.rideAck && st.chat.rideAck[p3.id]));
+console.log('heart on ' + RS + ':', JSON.stringify(st.chat && st.chat.rideAck && st.chat.rideAck[p3.id]));
 console.log('heart chip in panel:', await ev(`(${F}.document.body.innerText.match(/❤️[^\\n]{0,30}/) || [''])[0]`));
 await post('/gm-crew', { user_id: idOf(crew.driver), name: crew.driver + ' T', text: 'picked jester' });
 await sleep(1500);
 st = await call('getState', [false]);
-console.log('after "picked jester":', await row(223));
+console.log('after "picked jester":', await row(RS));
 await ev(`${F}.document.querySelectorAll('button').forEach(b => { if (b.textContent.trim() === '✕') b.click(); }), 1`);
 await sleep(1500); await shot('c2.png');
 

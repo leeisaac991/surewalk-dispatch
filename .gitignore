@@ -6,3 +6,4 @@ edge-extension/test/*.png
 node_modules/
 .claude/
 classic/test/sheet*.json
+classic/test/pairings*.json

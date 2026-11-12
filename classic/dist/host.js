@@ -71,17 +71,41 @@
     const h = header.map(x => String(x || '').toLowerCase().replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim());
     const map = {}, used = new Set();
     OLD.forEach(([k, re]) => { const i = h.findIndex((x, j) => re.test(x) && !used.has(j)); if (i >= 0) { map[k] = i + 1; used.add(i); } });
-    const missing = [1, 8, 9, 10, 11, 15, 16, 3, 4].filter(k => !map[k]);
-    if (missing.length) throw new Error("Can't find the rides columns in row 1 of this tab (Form Submitted / Timestamp, First Name, Phone, Pick-up, Drop-off, Driver, Navigator, Call Time, Arrival Time). Pick the rides tab in ⚙ below.");
+    // No single timestamp column: the submission is a Date column + a Submitted Time column ("11/11/2026" + "23:51").
+    let date = 0, time = 0;
+    if (!map[1]) {
+      date = h.findIndex((x, j) => /^(date|submitted date|date submitted)$/.test(x) && !used.has(j)) + 1;
+      time = h.findIndex((x, j) => /^(submitted time|time submitted|submission time|time)$/.test(x) && !used.has(j)) + 1;
+      if (date && time) { used.add(date - 1); used.add(time - 1); }
+    }
+    const composite = !map[1] && !!(date && time);
+    const missing = [8, 9, 10, 11, 15, 16, 3, 4].filter(k => !map[k]).concat(map[1] || composite ? [] : [1]);
+    if (missing.length) throw new Error("Can't find the rides columns in row 1 of this tab (Date + Submitted Time or Form Submitted / Timestamp, First Name, Phone, Pick-up, Drop-off, Driver, Navigator, Call Time, Arrival Time). Pick the rides tab in ⚙ below.");
     // the rest of the old columns (agreements, email…) take the remaining Excel columns in order
     let next = 1;
-    for (let k = 1; k <= VW; k++) {
+    for (let k = composite ? 2 : 1; k <= VW; k++) {
       if (map[k]) continue;
       while (next <= READ_COLS && used.has(next - 1)) next++;
       if (next <= READ_COLS) { map[k] = next; used.add(next - 1); next++; }
     }
-    return { map, ts: map[1] };
+    return { map, ts: composite ? time : map[1], date, time, composite };
   }
+  // A ride row's submission time as "yyyy-MM-dd HH:mm:ss" (Austin), from the timestamp cell or Date + Submitted Time.
+  function rowWall(L, c) {
+    if (!L.composite) { const t = c[L.ts - 1]; return textToWall(t.t) || (typeof t.v === 'number' && isDateFmt(t.fmt) ? serialToWall(t.v) : null); }
+    const d = c[L.date - 1], t = c[L.time - 1];
+    let day = null, hms = null, m;
+    if (typeof d.v === 'number' && d.v > 1000) day = serialToWall(d.v).slice(0, 10);
+    else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(d.t).trim()))) day = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[1])}-${pad(m[2])}`;
+    if (typeof t.v === 'number' && t.v < 1) hms = serialToWall(t.v).slice(11, 19);
+    else if ((m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i.exec(String(t.t).trim()))) {
+      const h = m[4] ? (+m[1] % 12) + (/pm/i.test(m[4]) ? 12 : 0) : +m[1];
+      hms = `${pad(h)}:${m[2]}:${m[3] || '00'}`;
+    }
+    return day && hms ? `${day} ${hms}` : null;
+  }
+  // "2026-11-11 23:51:00" -> "11/11/2026 23:51:00", how the original code expects a timestamp to read
+  const wallText = w => `${+w.slice(5, 7)}/${+w.slice(8, 10)}/${w.slice(0, 4)} ${+w.slice(11, 13)}:${w.slice(14, 16)}:${w.slice(17, 19)}`;
   // Excel column for an old-layout column on a given row: ride rows use the header map; the roster block below
   // the rides is the old block shifted to start in the timestamp column.
   const xcolOf = (L, row, k) => (row <= L.lastRide ? L.map[k] : k + L.ts - 1);
@@ -131,7 +155,23 @@
           cells[p.r + i] = line;
         }
       }
-      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells };
+      // The shift roster: its own tab ("Pairings") when the workbook has one, else the block under the rides.
+      ctx.workbook.worksheets.load('items/name');
+      await ctx.sync();
+      const pt = ctx.workbook.worksheets.items.find(s => /pairing/i.test(s.name) && s.name !== ws.name);
+      let pairings = null;
+      if (pt) {
+        const pu = pt.getUsedRangeOrNullObject(true);
+        pu.load('rowIndex,rowCount');
+        await ctx.sync();
+        if (!pu.isNullObject) {
+          const n = Math.min(pu.rowIndex + pu.rowCount, ROSTER_ROWS), pr = pt.getRangeByIndexes(0, 0, n, VW);
+          pr.load('text');
+          await ctx.sync();
+          pairings = pr.text.map(r => r.map(x => String(x == null ? '' : x).slice(0, 300)));
+        }
+      }
+      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells, pairings };
     });
     await clearCopiedColors(got);
     cache = got; cacheAt = Date.now();
@@ -158,7 +198,7 @@
       const c = x.cells[r], above = rowFill(r - 1), mine = rowFill(r);
       if (!c || !mine || mine === '#ffffff' || mine !== above) continue;
       if (UNTOUCHED.some(k => { const xc = L.map[k]; return xc && String(c[xc - 1].t).trim() && String(c[xc - 1].t).trim() !== '0'; })) continue;
-      const w = textToWall(c[L.ts - 1].t) || (typeof c[L.ts - 1].v === 'number' ? serialToWall(c[L.ts - 1].v) : null);
+      const w = rowWall(L, c);
       if (!w) continue;
       const [d, t] = w.split(' '), [y, mo, dd] = d.split('-').map(Number), [h, mi] = t.split(':').map(Number);
       const age = (now - (Date.UTC(y, mo - 1, dd, h, mi) - austinOffsetMs(Date.UTC(y, mo - 1, dd, h, mi)))) / 60e3;
@@ -183,12 +223,20 @@
 
   // The snapshot Excel.gs expects, in the OLD column layout (see apps-script/Excel.gs XlSheet_).
   function virtualSnap(x) {
-    const rows = {};
+    const rows = {}, L = x.L;
     Object.keys(x.cells).forEach(rk => {
       const r = +rk, src = x.cells[r], d = [], v = {}, f = {}, bg = [], fc = [];
+      if (x.pairings && r > L.lastRide) return; // the roster comes from the Pairings tab (added below)
       let any = false;
       for (let k = 1; k <= VW; k++) {
-        const xc = xcolOf(x.L, r, k), c = xc ? src[xc - 1] : null;
+        if (k === 1 && L.composite && r <= L.lastRide) { // the timestamp the original code expects, from Date + Submitted Time
+          const w = r === 1 ? null : rowWall(L, src), tc = src[L.time - 1];
+          d.push(r === 1 ? 'Timestamp' : w ? wallText(w) : '');
+          if (w) { v[1] = { t: w }; any = true; }
+          bg.push(tc.bg); fc.push(tc.fc);
+          continue;
+        }
+        const xc = xcolOf(L, r, k), c = xc ? src[xc - 1] : null;
         if (!c) { d.push(''); bg.push('#ffffff'); fc.push('#000000'); continue; }
         let t = c.t;
         if (typeof c.v === 'number' && isDateFmt(c.fmt)) { v[k] = { t: serialToWall(c.v) }; if (/^#+$/.test(t)) t = showDate(c.v, c.fmt); }
@@ -206,7 +254,17 @@
       if (Object.keys(f).length) row.f = f;
       if (any || row.bg !== '#ffffff' || row.v) rows[r] = row;
     });
-    return { book: x.book, name: x.name, lastRow: x.lastRow, lastCol: VW, width: VW, top: x.top, rows };
+    // The Pairings tab, shown to the original code where it looks for the roster: right under the rides (one blank row).
+    let lastRow = x.lastRow;
+    if (x.pairings) {
+      x.pairings.forEach((line, i) => {
+        const d = line.slice(0, VW);
+        while (d.length && d[d.length - 1] === '') d.pop();
+        if (d.length) rows[L.lastRide + 2 + i] = { d, bg: '#ffffff', fc: '#000000' };
+      });
+      lastRow = L.lastRide + 1 + x.pairings.length;
+    }
+    return { book: x.book, name: x.name, lastRow, lastCol: VW, width: VW, top: x.top, rows };
   }
 
   /* ---------------- writing: old-layout ops -> Excel ---------------- */
