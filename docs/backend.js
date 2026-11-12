@@ -2730,7 +2730,7 @@ function getStateCore_(fast) {
 
 function act(name, args) {
 
-  const actions = { assignRides, unassignRides, moveRides, markArrived, markPicked, cancelRide, markDuplicate, markNotAda, editRide, setCrewStatus, setCrewState, restoreRide,
+  const actions = { assignRides, unassignRides, moveRides, markArrived, markPicked, cancelRide, markDuplicate, markNotAda, editRide, setCrewStatus, setCrewState, restoreRide, dismissLostRide,
     saveCrew, removeCrews, setTonightColor, toggleShift, dismissChat, setSyncRunning, clearGroupMeLog,
     saveGroupMeToken, setGroupMeGroup, forgetGroupMeToken, undoAction };
   if (!Object.prototype.hasOwnProperty.call(actions, name)) throw new Error(`Unknown action "${name}" — re-paste all files.`);
@@ -2845,7 +2845,7 @@ function ledgerExtras_(statusById) {
     const e = L[id], s = statusById[id];
     if (s && s.state !== 'open') { delete L[id]; changed = true; return; }
     if (s && s.driver) return;
-    if (!s && Date.now() - e.sentAt > 3 * 3600e3) { delete L[id]; changed = true; return; }
+    if (!s && (!e.sentAt || typeof e.sentAt !== 'number' || Date.now() - e.sentAt > 3 * 3600e3)) { delete L[id]; changed = true; return; }
     extras.push(Object.assign({}, e, { row: s ? s.row : e.row, arrived: s ? s.arrived : (e.arrived || ''), picked: false, dupOf: null,
       lost: s ? 'crew missing in sheet' : 'row not found in sheet' }));
   });
@@ -2861,6 +2861,42 @@ function restoreRide(ref) {
     const cur = sh.getRange(row, 1, 1, CFG.LAST_COL).getDisplayValues()[0];
     if (String(cur[COL.DRIVER - 1]).trim()) throw new Error(`${e.first} already has a crew in the sheet (${cur[COL.DRIVER - 1]}) — refresh.`);
     sh.getRange(row, COL.LOC, 1, 4).setValues([[e.loc || zoneOf_(e.dropoff) || '', e.van || '', e.driver, e.nav || '']]);
+  });
+}
+
+function dismissLostRide(ref) {
+  return withLock_(() => {
+    const L = loadLedger_();
+    let changed = false;
+    if (!ref || ref === 'all' || (typeof ref === 'object' && ref.all)) {
+      const tonight = tonight_();
+      const statusById = tonight.statusById;
+      Object.keys(L).forEach(id => {
+        const s = statusById[id];
+        if (!s || (s && !s.driver)) {
+          delete L[id];
+          changed = true;
+        }
+      });
+    } else {
+      const refs = Array.isArray(ref) ? ref : [ref];
+      refs.forEach(r => {
+        const id = r && r.id ? r.id : (typeof r === 'string' ? r : (r && r.row ? String(r.row) : null));
+        if (id && L[id]) {
+          delete L[id];
+          changed = true;
+        } else if (r && r.row) {
+          Object.keys(L).forEach(k => {
+            if (L[k] && L[k].row === r.row) {
+              delete L[k];
+              changed = true;
+            }
+          });
+        }
+      });
+    }
+    if (changed) saveLedger_(L);
+    return { ok: true };
   });
 }
 

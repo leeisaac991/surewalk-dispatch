@@ -1621,10 +1621,18 @@
 
   function menu(r, withCopy) {
     if (!openMenus.has(r.row)) return '';
+    if (r.lost) {
+      return `<div class="menu${appearIf('m' + r.row)}">
+        <span class="muted">${r.row ? 'Row ' + r.row + ' · ' : ''}${esc(r.lost)}</span>
+        <button onclick="copyRide(${js([refOf(r)])})">Copy</button>
+        ${r.lost === 'crew missing in sheet' ? `<button onclick="restoreRide(${js(refOf(r))})">Restore in sheet</button>` : ''}
+        <button class="danger" onclick="dismissLostRide(${js(refOf(r))})">Remove from board</button>
+      </div>`;
+    }
     return `<div class="menu${appearIf('m' + r.row)}">
       <span class="muted">Row ${r.row}</span>
       ${withCopy ? `<button onclick="copyRide(${js([refOf(r)])})">Copy</button>` : moveMenu(r)}
-      ${withCopy && !r.picked && !r.lost ? `<button onclick="takeOff(${js(r.id)})">Take off ride</button>${crewMoveMenu(r)}` : ''}
+      ${withCopy && !r.picked ? `<button onclick="takeOff(${js(r.id)})">Take off ride</button>${crewMoveMenu(r)}` : ''}
       <select id="reason${r.row}" onchange="reasonPick[${r.row}] = this.value"><option value="">Cancel reason…</option>${state.reasons.map(x => `<option${reasonPick[r.row] === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
       <button class="danger" onclick="cancel(${r.row})">Cancel ride</button>
       ${selected.size > 1 ? `<span class="muted" style="color:var(--red)">${selected.size} rides selected — select only one ride to cancel</span>` : ''}
@@ -1763,7 +1771,12 @@
     $('activeCount').textContent = state.active.filter(r => !r.picked).length;
 
     const carriedOnly = c => [...c.places.values()].every(p => p.rides.every(r => r.picked));
-    $('active').innerHTML = [...crews.entries()].sort(([, a], [, b]) => carriedOnly(a) - carriedOnly(b)).map(([k, c]) => {
+    const lostList = state.active.filter(r => r.lost);
+    const lostBanner = lostList.length ? `<div class="alert" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>⚠ <b>${lostList.length} phantom ride${lostList.length > 1 ? 's' : ''}</b> not in sheet</span>
+      <button class="link" style="color:var(--red);font-weight:600" onclick="dismissAllLostRides()">Remove all</button>
+    </div>` : '';
+    const cards = [...crews.entries()].sort(([, a], [, b]) => carriedOnly(a) - carriedOnly(b)).map(([k, c]) => {
       const b = boardByKey[k];
       const badge = b && b.status === 'gas' ? `<span class="badge gas">⛽ GETTING GAS${b.gasSince ? ` · ${mins(b.gasSince)}m` : ''}</span>`
         : b && b.status !== 'break' ? `<button class="badge ${b.status}" title="Tap to mark ${b.status === 'available' ? 'busy' : 'empty'}"
@@ -1818,13 +1831,15 @@
                 <div class="pmain">${rideBody(r, (r.picked ? `<span class="tag zone">picked${r.pickedAt ? ' ' + esc(r.pickedAt) : ''}</span>` : r.arrived ? `<span class="tag zone">at ${esc(r.arrived)}</span>` : '') +
                   (r.dupOf ? `<span class="tag dup">dup? row ${r.dupOf.row}</span>` : '') +
                   (r.lost ? `<span class="tag posted" title="The panel sent this ride out, but the sheet no longer shows it in progress">⚠ ${esc(r.lost)}</span>` : ''))}
-                  ${r.lost === 'crew missing in sheet' ? `<button class="chatbtn" onclick="event.stopPropagation(); restoreRide(${js(refOf(r))})">Restore</button>` : ''}</div>
+                  ${r.lost === 'crew missing in sheet' ? `<button class="chatbtn" onclick="event.stopPropagation(); restoreRide(${js(refOf(r))})">Restore</button>` : ''}
+                  ${r.lost ? `<button class="chatbtn" style="color:var(--red)" onclick="event.stopPropagation(); dismissLostRide(${js(refOf(r))})" title="Remove this ride from the dispatch panel">Remove</button>` : ''}</div>
                 <button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button></div>
               ${openMenus.has(r.row) ? `<div>${menu(r, true)}</div>` : ''}`; }).join('')}
             </div>${openThreads.has(gKey) ? `<div class="${appearIf('t' + gKey)}">${thread(gIds)}</div>` : ''}</div>`;
         }).join('')}
       </div>`;
-    }).join('') || `<div class="empty-note">${mascotSvg()}<div>No rides in progress.</div></div>`;
+    }).join('');
+    $('active').innerHTML = lostBanner + (cards || `<div class="empty-note">${mascotSvg()}<div>No rides in progress.</div></div>`);
     seenCards = new Set(crews.keys());
     seenActive = new Set(state.active.map(r => r.id));
     [...selActive].forEach(id => { if (!state.active.some(r => r.id === id && !r.picked)) selActive.delete(id); });
@@ -2094,6 +2109,21 @@
   async function restoreRide(ref) {
     await doAct('restoreRide', [ref]);
     status('Restored the crew in the sheet.');
+  }
+  async function dismissLostRide(ref) {
+    if (ref && ref.row) openMenus.delete(ref.row);
+    const id = ref && ref.id ? ref.id : ref;
+    await doAct('dismissLostRide', [ref], s => {
+      s.active = s.active.filter(r => (id ? r.id !== id : true) && (ref && ref.row ? r.row !== ref.row : true));
+    });
+    status('Removed phantom ride from board.');
+  }
+  async function dismissAllLostRides() {
+    if (!confirm('Remove all phantom rides that are not in the sheet?')) return;
+    await doAct('dismissLostRide', ['all'], s => {
+      s.active = s.active.filter(r => !r.lost);
+    });
+    status('Removed all phantom rides from board.');
   }
 
   async function copyRide(refs) {
@@ -2877,6 +2907,7 @@ show();
       cancelRide: () => `Cancelled row ${a[0].row}`, markDuplicate: () => `Marked row ${a[0].row} duplicate`,
       markNotAda: () => `Marked row ${a[0].row} not ADA`, editRide: () => `Edited row ${a[0].row}`,
       restoreRide: () => 'Restored a ride', setCrewStatus: () => `${crewName(a[0])} marked ${a[1] === 'available' ? 'empty' : 'busy'}`,
+      dismissLostRide: () => 'Removed phantom ride',
       saveCrew: () => 'Saved crew', removeCrews: () => `Removed ${n(a[0])} crew${n(a[0]) > 1 ? 's' : ''}`,
       setCrewState: () => `${crewName(a[0])} ${a[1] === 'break' ? 'on break' : a[1] === 'gas' ? 'sent to gas' : a[1] === 'off' ? 'off shift' : 'back on'}`,
       dismissChat: () => 'Dismissed', toggleShift: () => `Toggled ${a[0]} shift`,

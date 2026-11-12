@@ -111,5 +111,29 @@ if (popT) {
   await sleep(2000);
   console.log('after closing the window, back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));
 }
+
+// Test phantom ride removal: assign a ride, then delete its row from the sheet to make it a phantom ride
+st = await call('getState', [true]);
+const pLost = st.pending[0], refLost = { row: pLost.row, id: pLost.id };
+await act('assignRides', [[refLost], crew, 'Auto', crew.van]);
+// Delete the row from the workbook to simulate it being cut / deleted from the sheet
+await ev(`__xl.type(${pLost.row}, Array(28).fill(''))`);
+st = await call('getState', [true]);
+const phantomRide = st.active.find(r => r.id === refLost.id);
+console.log('phantom ride detected:', phantomRide && phantomRide.lost);
+await ev(`${F}.refresh(true)`);
+await sleep(1500);
+const hasBanner = await ev(`${F}.document.body.innerText.includes("phantom ride")`);
+const hasRemoveBtn = await ev(`Array.from(${F}.document.querySelectorAll("button")).some(b => b.textContent.trim() === "Remove")`);
+console.log('phantom ride UI shows banner:', hasBanner, '| remove button:', hasRemoveBtn);
+const dis = await act('dismissLostRide', [refLost]);
+console.log('dismiss phantom ride ->', ok(dis));
+await ev(`${F}.refresh(true)`);
+await sleep(1500);
+st = await call('getState', [true]);
+const phantomAfter = st.active.find(r => r.id === refLost.id);
+const bannerAfter = await ev(`${F}.document.body.innerText.includes("phantom ride")`);
+console.log('after dismiss: ride present:', !!phantomAfter, '| banner present:', bannerAfter);
+
 console.log(logs.join('\n') || 'no page errors');
 process.exit(0);
