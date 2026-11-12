@@ -339,12 +339,14 @@
   function showInPane() {
     document.body.style.margin = '0';
     document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span><span id="swcMsg" style="flex:1;font-weight:400;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button id="swcRestart" style="${btnStyle}" title="Restart the panel (reloads it with the newest version)">↻ Restart</button>
       <button id="swcPop" style="${btnStyle}" title="Open the panel in its own window: resize it, maximize it, or move it to another screen">⧉ Pop out</button></div>
       <div id="swcNote" hidden style="position:fixed;top:${BAR}px;left:0;right:0;z-index:6;background:#fff4e5;color:#5a3000;border-bottom:1px solid #f0c48a;
         padding:8px 12px;font:13px Segoe UI,system-ui,sans-serif;line-height:1.4"></div>
       <iframe id="swcFrame" title="SURE Walk Dispatch" style="position:fixed;top:${BAR}px;left:0;width:100%;height:calc(100% - ${BAR}px);border:0"></iframe>`;
     document.getElementById('swcFrame').srcdoc = pageHtml();
     document.getElementById('swcPop').onclick = popOut;
+    document.getElementById('swcRestart').onclick = () => location.reload();
   }
   // Excel add-ins can't show alert boxes, so problems are explained in a note under the bar.
   function note(html) {

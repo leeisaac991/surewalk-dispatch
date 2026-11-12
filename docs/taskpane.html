@@ -16,8 +16,9 @@
   (async () => {
     const get = async f => { const r = await fetch(f, { cache: 'no-cache' }); if (!r.ok) throw new Error(f + ' (' + r.status + ')'); return r.text(); };
     try {
+      // every file is fetched fresh (never a stale browser copy), so a reopen always gets the newest panel
       if (!window.__SWC) { const [backend, sidebar] = await Promise.all([get('backend.js'), get('Sidebar.html')]); window.__SWC = { backend, sidebar }; }
-      const s = document.createElement('script'); s.src = 'host.js'; document.body.appendChild(s);
+      const s = document.createElement('script'); s.textContent = await get('host.js'); document.body.appendChild(s);
     } catch (e) {
       document.getElementById('loading').innerHTML = '<span style="color:#c62828">Could not load the panel: ' + e.message + '. Check the internet connection and reopen it.</span>';
     }
