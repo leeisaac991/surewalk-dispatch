@@ -1332,7 +1332,7 @@
     const byCrew = new Map();
     rs.filter(r => !(never && never.has(r.id))).forEach(r => { const k = keyOfRide(r); if (!byCrew.has(k)) byCrew.set(k, []); byCrew.get(k).push(r); });
     const ids = new Set(rs.map(r => r.id));
-    return [...byCrew.entries()].map(([k, gone]) => ({ key: k, text: removedText(state.active.filter(x => !ids.has(x.id) && !x.picked && keyOfRide(x) === k).sort((a, b) => a.row - b.row), gone) }));
+    return [...byCrew.entries()].map(([k, gone]) => ({ key: k, gone: gone.map(r => r.phone), text: removedText(state.active.filter(x => !ids.has(x.id) && !x.picked && keyOfRide(x) === k).sort((a, b) => a.row - b.row), gone) }));
   }
 
   const autoSendOn = () => prefs.autoSend !== false;
@@ -1344,7 +1344,7 @@
     const parts = (Array.isArray(textOrParts) ? textOrParts : [{ text: textOrParts, tags, crew }]).filter(p => p && p.text);
     if (!parts.length) return;
     if (!state.groupme.enabled) return showMessage(parts.map(p => p.text).join('\n\n'));
-    if (!autoSendOn()) { draftQueue = parts.slice(1); return openChat(parts[0].text, parts[0].tags); }
+    if (!autoSendOn()) { draftQueue = parts.slice(1); return openChat(parts[0].text, parts[0].tags).then(() => { goneDraft = parts[0].gone || null; }); }
     rideQ.push({ parts, gate, edited: false });
     pumpRideQ();
   }
@@ -1361,7 +1361,7 @@
         for (const p of job.parts) {
           if (p.dropped) continue;
           p.sending = true;
-          await openChat(p.text, p.tags); await sendChat();
+          await openChat(p.text, p.tags); goneDraft = p.gone || null; await sendChat();
           p.sent = true;
         }
         rideQ.shift();
@@ -1400,7 +1400,7 @@
     rs.forEach(r => selActive.delete(r.id));
     if (draftKey) stageRiders(rs.map(r => r.id), draftKey);
     status(`${rs.map(r => r.first).join(', ')} ${draftKey ? `waiting in ${crewLabel(draftKey)}'s car — press Assign there when ready` : 'back in Pending'}. ${state.groupme.enabled && autoSendOn() ? `${crews.map(crewLabel).join(' and ')} told in GroupMe.` : `Send ${crews.map(crewLabel).join(' and ')} the update so they don't pick them up.`}`);
-    postRideMessage(parts.map(p => ({ text: p.text, tags: tagOf(p.key), crew: p.key })));
+    postRideMessage(parts.map(p => ({ text: p.text, tags: tagOf(p.key), crew: p.key, gone: p.gone })));
   }
   async function moveToCrew(idOrIds, key) {
     const rs = ([].concat(idOrIds).length > 1 ? [].concat(idOrIds).map(i => state.active.find(x => x.id === i)).filter(r => r && !r.picked && !r.lost) : activeGroup([].concat(idOrIds)[0]))
@@ -1425,7 +1425,7 @@
     rs.forEach(r => selActive.delete(r.id));
     status(`${rs.map(r => r.first).join(', ')} moved to ${crewLabel(key)}. ${state.groupme.enabled && autoSendOn() ? 'Both crews told in GroupMe.' : 'Send the update so every crew knows.'}`);
 
-    postRideMessage(parts.map(p => ({ text: p.text, tags: tagOf(p.key), crew: p.key })).concat({ text: assignText(crew, rs), tags: tagOf(key), crew: key }));
+    postRideMessage(parts.map(p => ({ text: p.text, tags: tagOf(p.key), crew: p.key, gone: p.gone })).concat({ text: assignText(crew, rs), tags: tagOf(key), crew: key }));
   }
   async function addToCrew(pendingId, key) {
     const crew = state.crews.find(x => x.key === key);
@@ -2096,7 +2096,8 @@
     } catch (e) { return; }
     status('Cancelled row ' + row + '.');
     if (was && !neverHeard)
-      postRideMessage((rest.length ? ['Updated ride!'].concat(byPickup(rest).map(rideLine)) : []).concat(['CANCELLED: ' + String(was.first || '').trim()]).join('\n'), tagOf(keyOfRide(was)), null, keyOfRide(was));
+      postRideMessage([{ text: (rest.length ? ['Updated ride!'].concat(byPickup(rest).map(rideLine)) : []).concat(['CANCELLED: ' + String(was.first || '').trim()]).join('\n'),
+        tags: tagOf(keyOfRide(was)), crew: keyOfRide(was), gone: [was.phone] }]);
   }
   async function act(fn, refs) {
     const t = hhmm(), rows = refs.map(x => x.row);
@@ -2339,7 +2340,7 @@
   function hidePicker() { $('mentionPick').hidden = true; }
 
   const updateReplaceHint = () => {
-    const hide = !/^updated ride!/i.test($('chatInput').value.trim()) || !$('mentionPick').hidden;
+    const hide = !/^(updated ride!|cancelled:|removed:)|\n(cancelled|removed):/i.test($('chatInput').value.trim()) || !$('mentionPick').hidden;
     if ($('replaceHint').hidden === hide) return;
     const list = $('chatList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     $('replaceHint').hidden = hide;
@@ -2402,9 +2403,12 @@
     autosize($('chatInput'));
     updateReplaceHint();
   }
+
+  let goneDraft = null;
   async function sendChat() {
     const text = $('chatInput').value.trim();
     if (!text) return;
+    const gone = goneDraft || []; goneDraft = null;
 
     const mentions = [], used = new Set();
     mentionsDraft.forEach(md => {
@@ -2431,7 +2435,7 @@
         }
       }
       if (editing) { cancelEdit(true); feedMsgs = feedMsgs.filter(m => m.id !== editing.id); }
-      const res = editing ? await call('editMyMessage', editing.id, text, mentions, reply) : await call('sendGroupMe', text, mentions, reply);
+      const res = editing ? await call('editMyMessage', editing.id, text, mentions, reply) : await call('sendGroupMe', text, mentions, reply, gone);
       if (editing) status(res.deleted ? 'Edited — corrected message sent, original deleted.' : 'Corrected message sent, but the original was not deleted: ' + res.note, !res.deleted);
       o.state = 'delivered'; renderFeed();
       if (res && res.messageId && !editing) linkSentToUndo(text, res);
@@ -2441,12 +2445,12 @@
       if (rep) status(rep.note ? `Sent. ${rep.note}` : rep.deleted ? `Sent — deleted your earlier message${rep.deleted > 1 ? 's' : ''} for these riders.`
         : 'Sent. (No earlier message of yours for exactly these riders was found to delete.)', !!rep.note);
       feedSig = ''; loadFeed(true);
-      if (draftQueue.length && !$('chatInput').value.trim()) { const n = draftQueue.shift(); setComposer(n.text, n.tags); status('Next: the message for the other crew — review it, then Send.'); }
+      if (draftQueue.length && !$('chatInput').value.trim()) { const n = draftQueue.shift(); setComposer(n.text, n.tags); goneDraft = n.gone || null; status('Next: the message for the other crew — review it, then Send.'); }
     } catch (e) {
       if (answered.length) { answered.forEach(i => answering.delete(i)); render(); }
       o.state = 'failed'; renderFeed();
       if (!$('chatInput').value.trim()) {
-        $('chatInput').value = text; mentionsDraft = draftMentions; autosize($('chatInput')); updateReplaceHint();
+        $('chatInput').value = text; mentionsDraft = draftMentions; goneDraft = gone.length ? gone : null; autosize($('chatInput')); updateReplaceHint();
         if (draftReply) { replyDraft = draftReply; renderReplyBar(true); }
         if (editing) { editDraft = editing; $('editBar').hidden = false; }
       }

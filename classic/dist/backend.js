@@ -1951,11 +1951,14 @@ function likeMessage(messageId, on) {
   CacheService.getScriptCache().remove('recent');
 }
 
-function sendGroupMe(text, mentions, reply) {
+function sendGroupMe(text, mentions, reply, gone) {
   text = String(text || '').trim();
+
+  const gonePhones = /^(updated ride!|cancelled:|removed:)|\n(cancelled|removed):/i.test(text)
+    ? (gone || []).map(p => String(p).replace(/\D/g, '').slice(-10)).filter(d => d.length === 10) : [];
   const { messageId, replyDropped } = postMessage_(text, mentions, reply);
 
-  const replaced = /^updated ride!/i.test(text) ? deleteSuperseded_(text, messageId) : null;
+  const replaced = /^updated ride!/i.test(text) || gonePhones.length ? deleteSuperseded_(text, messageId, gonePhones) : null;
   return { sent: true, replaced, replyDropped, messageId };
 }
 
@@ -2050,8 +2053,8 @@ function deleteMyMessage_(id) {
 const phonesIn_ = text => (String(text || '').match(/\d[\d\s().-]{8,}\d/g) || [])
   .map(s => s.replace(/\D/g, '').slice(-10)).filter(d => d.length === 10);
 
-function deleteSuperseded_(text, newId) {
-  const phones = new Set(phonesIn_(text)), me = meId_(), group = groupId_();
+function deleteSuperseded_(text, newId, gone) {
+  const phones = new Set(phonesIn_(text).concat(gone || [])), me = meId_(), group = groupId_();
   if (!phones.size || !me) return { deleted: 0, failed: 0, note: me ? '' : 'Unknown GroupMe user — nothing deleted.' };
   const r = gmFetch_(`/groups/${group}/messages`, { limit: 100 });
   const old = ((r && r.messages) || []).filter(m => String(m.user_id) === me && String(m.id) !== String(newId || '') &&
