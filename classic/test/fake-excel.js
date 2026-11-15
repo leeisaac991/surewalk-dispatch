@@ -50,7 +50,7 @@
     getCellProperties() { const v = { value: this.grid(x => ({ format: { fill: { color: x.bg }, font: { color: x.fc } } })) }; pendingLoads.push(() => JSON.stringify(v).length); return v; }
   }
   const lastRow = () => { for (let r = grid.length; r > 0; r--) if (grid[r - 1].some(x => x.v !== '')) return r; return 0; };
-  const ws = { name: 'Sheet1', load() {},
+  const ws = { name: CONF.tab || 'November', load() {},
     getRangeByIndexes: (r, c, h, w) => new Rng(r, c, h, w),
     getRange(a) { const m = /^(\d+):(\d+)$/.exec(a); return new Rng(+m[1] - 1, 0, m[2] - m[1] + 1, W, a); },
     getUsedRangeOrNullObject() { return { isNullObject: false, rowIndex: 0, rowCount: lastRow(), load() {} }; } };
@@ -61,7 +61,10 @@
     getUsedRangeOrNullObject: () => ({ isNullObject: !pairRaw.length, rowIndex: 0, rowCount: pairRaw.length, load() {} }),
     getRangeByIndexes: (r, c, h, w) => ({ load() {}, get text() { const o = []; for (let i = 0; i < h; i++) { const l = []; for (let j = 0; j < w; j++) l.push(String((pairRaw[r + i] || [])[c + j] || '')); o.push(l); } return o; } }) };
   const workbook = { name: 'Sure Walk Fall 2026.xlsx', load() {},
-    worksheets: { items: [ws].concat(pws ? [pws] : []), load() {}, getFirst: () => ws, getItem: n => (pws && n === pws.name ? pws : ws) } };
+    // like the live workbook: "Pairings" is the FIRST tab, the month's rides tab after it
+    worksheets: { items: (pws ? [pws] : []).concat([ws]).map((x, i) => Object.assign(x, { position: i })), load() {},
+      getFirst() { return this.items[0]; },
+      getItem(n) { const x = this.items.find(t => t.name === n); if (!x) throw Object.assign(new Error(`There's no tab named "${n}".`), { code: 'ItemNotFound' }); return x; } } };
   // Like Excel on the web: one sync's answer may not exceed ~5 MB.
   const pendingLoads = [];
   window.__xlMaxSync = 0;

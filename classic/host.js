@@ -112,14 +112,35 @@
 
   /* ---------------- reading the workbook ---------------- */
   let conf = { sheet: ls.get('sheet', '') };
-  const sheetOf = ctx => (conf.sheet ? ctx.workbook.worksheets.getItem(conf.sheet) : ctx.workbook.worksheets.getFirst());
+  // The rides tab. The workbook's first tab is now "Pairings", so it isn't "the first tab" anymore:
+  //   the tab set in the panel (Rides tab box), else the tab named for tonight's month ("November", "Dec 2026"),
+  //   else any month tab, else the first tab that isn't Pairings. Writes go to the tab the last read used.
+  const MONTHS = ['jan(uary)?', 'feb(ruary)?', 'mar(ch)?', 'apr(il)?', 'may', 'june?', 'july?', 'aug(ust)?', 'sept?(ember)?', 'oct(ober)?', 'nov(ember)?', 'dec(ember)?'];
+  const monthOfTab = name => MONTHS.findIndex(m => new RegExp(`(^|[^a-z])${m}($|[^a-z])`, 'i').test(String(name)));
+  const nightMonth = () => +new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'numeric' })
+    .format(new Date(Date.now() - 6 * 3600e3)) - 1; // 12:30 AM Dec 1 is still the Nov 30 night
+  function pickRidesTab(names, month) {
+    const tabs = names.filter(n => !/pairing/i.test(n));
+    const back = n => (month - monthOfTab(n) + 12) % 12; // months since that tab's month: 0 = tonight's
+    const months = tabs.filter(n => monthOfTab(n) >= 0).sort((a, b) => back(a) - back(b));
+    return months[0] || tabs[0] || names[0];
+  }
+  let ridesTab = '';
+  async function sheetOf(ctx, forWrite) {
+    if (conf.sheet) return ctx.workbook.worksheets.getItem(conf.sheet);
+    if (!(forWrite && ridesTab)) {
+      const wss = ctx.workbook.worksheets; wss.load('items/name,items/position'); await ctx.sync();
+      ridesTab = pickRidesTab(wss.items.slice().sort((a, b) => a.position - b.position).map(s => s.name), nightMonth());
+    }
+    return ctx.workbook.worksheets.getItem(ridesTab);
+  }
   let cache = null, cacheAt = 0, dirty = true;
 
   async function readSheet() {
     if (cache && !dirty && Date.now() - cacheAt < MAX_AGE_MS) return cache;
     dirty = false;
     const got = await Excel.run(async ctx => {
-      const ws = sheetOf(ctx);
+      const ws = await sheetOf(ctx);
       ws.load('name'); ctx.workbook.load('name');
       const used = ws.getUsedRangeOrNullObject(true);
       used.load('rowIndex,rowCount');
@@ -207,7 +228,7 @@
     }
     if (!fixes.length) return;
     await Excel.run(async ctx => {
-      const ws = sheetOf(ctx);
+      const ws = await sheetOf(ctx, true);
       fixes.forEach(r => { const rg = ws.getRange(`${r}:${r}`); rg.format.fill.clear(); rg.format.font.color = '#000000'; });
       await ctx.sync();
     });
@@ -295,7 +316,7 @@
   async function applyOps(ops) {
     if (!ops.length) return;
     await Excel.run(async ctx => {
-      const ws = sheetOf(ctx);
+      const ws = await sheetOf(ctx, true);
       ops.forEach(op => {
         const rg = op.row != null && op.c == null ? ws.getRange(`${op.row}:${op.row}`) : ws.getRangeByIndexes((op.r || op.row) - 1, op.c - 1, 1, 1);
         if (op.t === 'v') {
@@ -478,7 +499,7 @@
   function problem(msg) {
     document.body.innerHTML = `<div style="font:14px Segoe UI,system-ui,sans-serif;padding:16px;max-width:460px">
       <h3 style="margin:0 0 8px">SURE Walk Dispatch</h3><p style="color:#c62828">${String(msg).replace(/</g, '&lt;')}</p>
-      <label style="display:grid;gap:4px;font-size:13px">Rides tab (blank = first tab)<input id="swcTab" value="${String(conf.sheet).replace(/"/g, '&quot;')}" style="padding:6px"></label>
+      <label style="display:grid;gap:4px;font-size:13px">Rides tab (blank = this month's tab, e.g. November)<input id="swcTab" value="${String(conf.sheet).replace(/"/g, '&quot;')}" style="padding:6px"></label>
       <button id="swcGo" style="margin-top:10px;padding:8px 14px">Try again</button></div>`;
     document.getElementById('swcGo').onclick = () => { conf.sheet = document.getElementById('swcTab').value.trim(); ls.set('sheet', conf.sheet); start(); };
   }
@@ -491,10 +512,10 @@
       if (dlg) return; // already showing in its own window
       showInPane();
     } catch (e) {
-      problem(e && e.code === 'ItemNotFound' ? `There's no tab named "${conf.sheet}".` : (e.message || String(e)));
+      problem(e && e.code === 'ItemNotFound' ? `There's no tab named "${conf.sheet || ridesTab}".` : (e.message || String(e)));
     }
   }
   window.SWC_HOST = { call: (fn, args) => rpc(fn, args), reload: () => location.reload(), popOut, // used by the panel page(s)
-    readSheet, virtualSnap, toExcelOps, rpc, get props() { return props; } }; // console / tests
+    readSheet, virtualSnap, pickRidesTab, get ridesTab() { return ridesTab; }, toExcelOps, rpc, get props() { return props; } }; // console / tests
   Office.onReady(() => start());
 })();
