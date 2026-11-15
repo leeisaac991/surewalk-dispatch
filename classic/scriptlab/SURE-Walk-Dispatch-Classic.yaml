@@ -1,12 +1,12 @@
 name: SURE Walk Dispatch
-description: The SURE Walk dispatch panel (the original one), running on this Excel workbook. Build 260ff0d.
+description: The SURE Walk dispatch panel (the original one), running on this Excel workbook. Build 540689a.
 host: EXCEL
 api_set: {}
 script:
   content: |
     // @ts-nocheck
-    // Loads the panel from github.com/leeisaac991/surewalk-dispatch (folder classic/dist, commit 260ff0d). Nothing to edit here.
-    const BASE = "https://cdn.jsdelivr.net/gh/leeisaac991/surewalk-dispatch@260ff0d8e15d34b3ba3ed15d4e97e1ca658d8e9e/classic/dist/";
+    // Loads the panel from github.com/leeisaac991/surewalk-dispatch (folder classic/dist, commit 540689a). Nothing to edit here.
+    const BASE = "https://cdn.jsdelivr.net/gh/leeisaac991/surewalk-dispatch@540689a86665a312aee071beb877f74e9afed71b/classic/dist/";
     document.body.innerHTML = '<div style="font:14px Segoe UI,system-ui,sans-serif;padding:24px;color:#6e6e73">Loading SURE Walk Dispatch…</div>';
     Promise.all(["backend.js", "Sidebar.html", "host.js"].map(f =>
       fetch(BASE + f).then(r => { if (!r.ok) throw new Error(f + " (" + r.status + ")"); return r.text(); })))
