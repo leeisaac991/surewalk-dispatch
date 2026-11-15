@@ -877,7 +877,7 @@
       const res = await call('act', fn, args);
       ok = true;
       if (res.undo) pushUndo(fn, args, res.undo);
-      if (my === actSeq) { state = keepHearts(res.state); render(); }
+      if (my === actSeq) { state = keepHearts(res.state); render(); takeRelays(); }
       return res.result;
     } finally {
       inflight--; busy = inflight > 0;
@@ -908,6 +908,38 @@
     const prev = state && state.chat && state.chat.rideAck, cur = next && next.chat && next.chat.rideAck;
     if (prev && cur) Object.keys(prev).forEach(id => { if (prev[id].ack && !(cur[id] && cur[id].ack)) cur[id] = prev[id]; });
     return next;
+  }
+
+  const relayed = new Set();
+  function takeRelays() {
+    const items = ((state && state.relay) || []).filter(x => !relayed.has(x.rid));
+    if (!items.length) return;
+    items.forEach(x => relayed.add(x.rid));
+    const crewOn = k => !!k && (state.crews || []).some(c => c.key === k && c.state !== 'off');
+    const restOf = (k, skip) => byPickup((state.active || []).filter(r => !r.picked && !r.lost && keyOfRide(r) === k && r.id !== skip));
+    const parts = [];
+    items.forEach(x => {
+      const name = String(x.first || '').trim();
+      if (x.kind === 'cancelled' && crewOn(x.crewKey)) {
+        const rest = restOf(x.crewKey, x.id);
+        parts.push({ text: (rest.length ? ['Updated ride!'].concat(rest.map(rideLine)) : []).concat(['CANCELLED: ' + name]).join('\n'),
+          tags: tagOf(x.crewKey), crew: x.crewKey, gone: [x.phone] });
+      } else if (x.kind === 'moved') {
+        if (crewOn(x.crewKey)) parts.push({ text: removedText(restOf(x.crewKey, x.id), [x]), tags: tagOf(x.crewKey), crew: x.crewKey, gone: [x.phone] });
+        const r = (state.active || []).find(a => a.id === x.id), to = (state.crews || []).find(c => c.key === x.toKey);
+        if (r && to && crewOn(x.toKey)) parts.push({ text: assignText(to, [r]), tags: tagOf(x.toKey), crew: x.toKey });
+      } else if (x.kind === 'changed' && crewOn(x.crewKey)) {
+        const rest = restOf(x.crewKey, '');
+        if (rest.some(r => r.id === x.id))
+          parts.push({ text: ['Updated ride!'].concat(rest.map(rideLine), [`CHANGED: ${name} — now ${x.pickup} → ${x.dropoff}`]).join('\n'),
+            tags: tagOf(x.crewKey), crew: x.crewKey });
+      }
+    });
+    if (parts.length) {
+      postRideMessage(parts);
+      status(`Told ${[...new Set(parts.map(p => crewLabel(p.crew)))].join(' and ')} about a change made outside the panel.`);
+    }
+    google.script.run.withFailureHandler(() => items.forEach(x => relayed.delete(x.rid))).ackRelays(items.map(x => x.rid));
   }
   const hhmm = () => { const d = new Date(); return `${d.getHours()}:${pad2(d.getMinutes())}`; };
 
@@ -946,7 +978,7 @@
   function applyFresh(fresh) {
     const ids = new Set(fresh.active.map(r => r.id));
     const leaving = state && state.active.some(r => !ids.has(r.id));
-    const apply = () => { state = keepHearts(fresh); render(); startLive(); syncPrefs(state.prefs); };
+    const apply = () => { state = keepHearts(fresh); render(); startLive(); syncPrefs(state.prefs); takeRelays(); };
     leaving && canRedraw() ? morph(apply) : apply();
   }
   async function refresh(fast) {

@@ -1363,7 +1363,8 @@ function cancelByMessage_(sh, rides, m) {
   const done = [];
   try {
     targets.forEach(r => { cancelRow_(sh, r.row, reason); r.cancelled = true; done.push(r); });
-  } catch (e) { return { ok: false, rows: done.map(r => r.row), ids: done.map(r => r.id), result: e.message }; }
+  } catch (e) { ledgerForget_(done.map(r => r.id)); return { ok: false, rows: done.map(r => r.row), ids: done.map(r => r.id), result: e.message }; }
+  ledgerForget_(done.map(r => r.id));
   done.forEach(r => { const i = rides.indexOf(r); if (i >= 0) rides.splice(i, 1); });
   return { ok: true, cancelled: true, rows: done.map(r => r.row), ids: done.map(r => r.id),
            result: `Cancelled (${reason}): ${done.map(r => r.first).join(', ')}` };
@@ -2587,6 +2588,7 @@ function tonight_() {
     const get = c => String(disp[i][c - 1]).trim();
     const rid = rideId_(ts, get(COL.PHONE), get(COL.FIRST)), color = rowColor_(bgs[i]);
     statusById[rid] = { row: first + i, driver: get(COL.DRIVER), arrived: get(COL.ARRIVE), color: color.color || '',
+      nav: get(COL.NAV), pickup: get(COL.PICKUP), dropoff: get(COL.DROPOFF), reason: get(COL.REASON),
       tonight: nightKey_(ts) === night,
       state: hasReason_(get(COL.REASON)) || color.kind === 'black' ? 'cancelled' : color.kind === 'red' ? 'dup' : isPickedRow_(color, get(COL.ARRIVE)) ? 'picked' : 'open' };
     if (hasReason_(get(COL.REASON))) return;
@@ -2722,6 +2724,9 @@ function getStateCore_(fast) {
     lastRide: tonight.lastRide,
     wait: tonight.wait, shifts: tonight.shifts, shiftsOn: tonight.shiftsOn, rosterDate: tonight.rosterDate, rosterInfo: tonight.rosterInfo,
     removedCrews,
+
+    relay: loadRelays_().map(x => Object.assign(x, { crewKey: (crews.find(c => samePair_(c, x)) || {}).key || '',
+      toKey: x.kind === 'moved' ? (crews.find(c => samePair_(c, { driver: x.toDriver, nav: x.toNav })) || {}).key || '' : '' })),
     locations: LOCATIONS, vans: VANS, reasons: CANCEL_REASONS,
     dispatcher: userProps_().getProperty('dispatcher') || '',
     dispatcherUsed: dispatcherName_(),
@@ -2842,17 +2847,48 @@ function ledgerAdd_(entries) {
   saveLedger_(L);
 }
 
+function ledgerForget_(ids) {
+  const L = loadLedger_(); let changed = false;
+  (ids || []).forEach(id => { if (id && L[id]) { delete L[id]; changed = true; } });
+  if (changed) saveLedger_(L);
+}
+
+function loadRelays_() {
+  const v = bigGet_('RIDE_RELAY');
+  return v && v.night === nightKey_(new Date()) ? v.items.filter(x => Date.now() - (x.at || 0) < 30 * 60e3) : [];
+}
+function saveRelays_(items) { bigSet_('RIDE_RELAY', { night: nightKey_(new Date()), items: items.slice(-50) }); }
+function ackRelays(ids) {
+  const done = new Set((ids || []).map(String));
+  const items = loadRelays_(), left = items.filter(x => !done.has(x.rid));
+  if (left.length !== items.length) saveRelays_(left);
+  return left.length;
+}
+
 function ledgerExtras_(statusById) {
-  const L = loadLedger_(), extras = [];
+  const L = loadLedger_(), extras = [], relays = [];
   let changed = false;
+  const relay = (kind, e, more) => relays.push(Object.assign({ rid: kind + ':' + e.id + ':' + Date.now(), at: Date.now(), kind, id: e.id, first: e.first,
+    phone: e.phone, pickup: e.pickup, dropoff: e.dropoff, driver: e.driver, nav: e.nav || '' }, more));
   Object.keys(L).forEach(id => {
     const e = L[id], s = statusById[id];
+    if (s && s.state === 'cancelled' && s.tonight) relay('cancelled', e, { reason: s.reason || '' });
+    if (s && s.state === 'open' && s.driver && s.tonight) {
+      if (!samePair_({ driver: s.driver, nav: s.nav }, e)) {
+        relay('moved', e, { toDriver: s.driver, toNav: s.nav || '' });
+        Object.assign(e, { driver: s.driver, nav: s.nav || '' }); changed = true;
+      } else if ((s.pickup && s.pickup !== e.pickup) || (s.dropoff && s.dropoff !== e.dropoff)) {
+        relay('changed', e, { pickup: s.pickup, dropoff: s.dropoff, wasPickup: e.pickup, wasDropoff: e.dropoff });
+        Object.assign(e, { pickup: s.pickup, dropoff: s.dropoff, pickupKey: placeKey_(s.pickup), pickupName: canonPlace_(s.pickup) || s.pickup }); changed = true;
+      }
+    }
     if (s && s.state !== 'open') { delete L[id]; changed = true; return; }
     if (s && s.driver) return;
     if (!s && (!e.sentAt || typeof e.sentAt !== 'number' || Date.now() - e.sentAt > 3 * 3600e3)) { delete L[id]; changed = true; return; }
     extras.push(Object.assign({}, e, { row: s ? s.row : e.row, arrived: s ? s.arrived : (e.arrived || ''), picked: false, dupOf: null,
       lost: s ? 'crew missing in sheet' : 'row not found in sheet' }));
   });
+  if (relays.length) { try { saveRelays_(loadRelays_().concat(relays)); } catch (e) { console.error('relay', e); return extras; } }
   if (changed) { try { saveLedger_(L); } catch (e) {   } }
   return extras;
 }
@@ -3188,8 +3224,9 @@ function editRide(ref, fields) {
 
 function cancelRide(ref, reason) {
   withLock_(() => {
-    const sh = sheet_();
-    cancelRow_(sh, resolveRows_(sh, [ref])[0], reason);
+    const sh = sheet_(), row = resolveRows_(sh, [ref])[0];
+    cancelRow_(sh, row, reason);
+    ledgerForget_([rowIdAt_(sh, row)]);
   });
 }
 function cancelRow_(sh, row, reason) {
