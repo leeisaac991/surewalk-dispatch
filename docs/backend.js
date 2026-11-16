@@ -61,6 +61,7 @@ const UrlFetchApp = {
     opts = opts || {};
     const x = new XMLHttpRequest();
     x.open(String(opts.method || 'get').toUpperCase(), url, false);
+    try { x.timeout = 20000; } catch (e) {   }
     const h = opts.headers || {};
     Object.keys(h).forEach(k => x.setRequestHeader(k, h[k]));
     if (opts.payload != null && opts.contentType) x.setRequestHeader('Content-Type', opts.contentType);

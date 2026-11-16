@@ -16,6 +16,9 @@
   const READ_COLS = 30;     // Excel columns read (A:AD)
   const VW = 26;            // columns the original code sees (A:Z of the old layout)
   const SCAN_ROWS = 600, FIND_ROWS = 1000, MAX_AGE_MS = 8000;
+  const PEEK_AGE_MS = 30000;    // a ride check (every 2 s) reuses a read this old when no ride was added or changed
+  const XL_TIMEOUT_MS = 45000;  // one Excel.run; a stuck one would hold up every later call
+  const BACKEND_TIMEOUT_MS = 90000; // one call in the worker (GroupMe requests time out on their own after 20 s)
   const BATCH_ROWS = 100;   // rows per read (Excel on the web limits each answer to ~5 MB)
   const ROSTER_ROWS = 400;  // read at most this far below the last ride (the roster block)
 
@@ -136,10 +139,48 @@
   }
   let cache = null, cacheAt = 0, dirty = true;
 
-  async function readSheet() {
+  // Calls run one at a time (see rpc), so nothing may wait forever: a stuck step fails and the next call goes ahead.
+  function withTimeout(p, ms, why) {
+    let t;
+    return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(why)), ms); })]).finally(() => clearTimeout(t));
+  }
+  // After one stuck Excel call, the calls queued behind it fail at once for a while (instead of each waiting out its
+  // own timeout), so the queue empties and the panel's next try comes quickly.
+  const XL_SLOW = 'Excel on the web took too long to answer. The panel will try again.';
+  let xlStuckUntil = 0;
+  function xlRun(fn) {
+    if (Date.now() < xlStuckUntil) return Promise.reject(new Error(XL_SLOW));
+    const run = Excel.run(fn);
+    run.then(() => { xlStuckUntil = 0; }, () => { xlStuckUntil = 0; }); // Excel answered after all: no more waiting
+    return withTimeout(run, XL_TIMEOUT_MS, XL_SLOW).catch(e => {
+      if (e.message === XL_SLOW) xlStuckUntil = Date.now() + 15000;
+      throw e;
+    });
+  }
+  const probeOf = (lastRow, text) => lastRow + '|' + hash(text.map(r => r[0]).join('\n'));
+  // Cheap check for a ride check: the last row and the timestamp column, compared with the last full read.
+  async function unchangedSince(c) {
+    return xlRun(async ctx => {
+      const ws = await sheetOf(ctx);
+      const used = ws.getUsedRangeOrNullObject(true); used.load('rowIndex,rowCount');
+      await ctx.sync();
+      const lastRow = used.isNullObject ? 1 : used.rowIndex + used.rowCount;
+      if (lastRow !== c.lastRow) return false;
+      const aTop = Math.max(1, lastRow - FIND_ROWS + 1);
+      const ts = ws.getRangeByIndexes(aTop - 1, c.L.ts - 1, lastRow - aTop + 1, 1); ts.load('text');
+      await ctx.sync();
+      return probeOf(lastRow, ts.text) === c.probe;
+    });
+  }
+
+  async function readSheet(peek) {
     if (cache && !dirty && Date.now() - cacheAt < MAX_AGE_MS) return cache;
+    if (peek && cache && !dirty && Date.now() - cacheAt < PEEK_AGE_MS && await unchangedSince(cache)) return cache;
     dirty = false;
-    const got = await Excel.run(async ctx => {
+    try { return await readAll(); } catch (e) { dirty = true; throw e; }
+  }
+  async function readAll() {
+    const got = await xlRun(async ctx => {
       const ws = await sheetOf(ctx);
       ws.load('name'); ctx.workbook.load('name');
       const used = ws.getUsedRangeOrNullObject(true);
@@ -151,6 +192,7 @@
       const aTop = Math.max(1, lastRow - FIND_ROWS + 1);
       const tsCol = ws.getRangeByIndexes(aTop - 1, L.ts - 1, lastRow - aTop + 1, 1); tsCol.load('text');
       await ctx.sync();
+      const probe = probeOf(lastRow, tsCol.text);
       L.lastRide = 1;
       for (let i = tsCol.text.length - 1; i >= 0; i--) if (aTop + i > 1 && /\d{1,2}:\d{2}/.test(tsCol.text[i][0])) { L.lastRide = aTop + i; break; }
       const top = Math.max(2, L.lastRide - SCAN_ROWS + 1);
@@ -192,7 +234,7 @@
           pairings = pr.text.map(r => r.map(x => String(x == null ? '' : x).slice(0, 300)));
         }
       }
-      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells, pairings };
+      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells, pairings, probe };
     });
     await clearCopiedColors(got);
     cache = got; cacheAt = Date.now();
@@ -227,7 +269,7 @@
       fixes.push(r);
     }
     if (!fixes.length) return;
-    await Excel.run(async ctx => {
+    await xlRun(async ctx => {
       const ws = await sheetOf(ctx, true);
       fixes.forEach(r => { const rg = ws.getRange(`${r}:${r}`); rg.format.fill.clear(); rg.format.font.color = '#000000'; });
       await ctx.sync();
@@ -315,7 +357,8 @@
   const toCell = v => (v && typeof v === 'object' && 't' in v ? wallToSerial(v.t) : v);
   async function applyOps(ops) {
     if (!ops.length) return;
-    await Excel.run(async ctx => {
+    dirty = true; // even if the write times out, it may still land: read again next time
+    await xlRun(async ctx => {
       const ws = await sheetOf(ctx, true);
       ops.forEach(op => {
         const rg = op.row != null && op.c == null ? ws.getRange(`${op.row}:${op.row}`) : ws.getRangeByIndexes((op.r || op.row) - 1, op.c - 1, 1, 1);
@@ -349,7 +392,16 @@
   function backend(msg) {
     msg.id = ++seq;
     if (direct) return Promise.resolve(direct(msg));
-    return new Promise(res => { waiting[msg.id] = res; worker.postMessage(msg); });
+    const id = msg.id;
+    return withTimeout(new Promise(res => { waiting[id] = res; worker.postMessage(msg); }), BACKEND_TIMEOUT_MS,
+      'The panel took too long on that (GroupMe or the network may be slow). Try again.').catch(e => {
+      // the worker is stuck: start a fresh one (it gets this browser's saved settings with its first call)
+      delete waiting[id];
+      try { worker.terminate(); } catch (x) { /* gone */ }
+      Object.keys(waiting).forEach(k => delete waiting[k]);
+      worker = null; propsSent = false; startBackend();
+      throw e;
+    });
   }
 
   // Calls run one at a time, so each one sees the previous call's writes.
@@ -357,7 +409,7 @@
   const lastPeek = { key: '', result: null };
   function rpc(fn, args) {
     const job = chain.then(async () => {
-      const x = await readSheet();
+      const x = await readSheet(fn === 'peek');
       const snap = virtualSnap(x);
       const peekKey = fn === 'peek' ? JSON.stringify(snap).length + '|' + hash(JSON.stringify(snap)) + '|' + JSON.stringify(args) : '';
       if (peekKey && peekKey === lastPeek.key) return lastPeek.result;
@@ -451,7 +503,13 @@
    * there, so this works in the SURE Walk add-in, not in Script Lab. The dialog page (dialog.html) shows the same panel and sends every call here.
    */
   const CHUNK = 24000;
-  let dlg = null, dlgSeq = 0;
+  let dlg = null, dlgSeq = 0, dlgBeat = null;
+  // The window can't tell a slow call from a closed side panel, so this side says it's still here every 5 s.
+  function setDialog(d) {
+    dlg = d;
+    clearInterval(dlgBeat); dlgBeat = null;
+    if (d) dlgBeat = setInterval(() => { try { dlgSend({ t: 'hb' }); } catch (e) { /* window closing */ } }, 5000);
+  }
   const dlgParts = {};
   function dlgSend(obj) {
     if (!dlg) return;
@@ -474,7 +532,7 @@
     else if (m.t === 'call') rpc(m.fn, m.args).then(r => dlgSend({ t: 'ret', id: m.id, ok: true, result: r }), e => dlgSend({ t: 'ret', id: m.id, ok: false, error: e.message || String(e) }));
     else if (m.t === 'reload') location.reload();
   }
-  function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } dlg = null; showInPane(); }
+  function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } setDialog(null); showInPane(); }
   function popOut() {
     const ui = window.Office && Office.context && Office.context.ui;
     if (!window.__SWC_HOSTED || !ui || !ui.displayDialogAsync) {
@@ -487,9 +545,9 @@
         note(`<b>Excel couldn't open the window</b> (${esc(res.error && res.error.message)}, code ${esc(res.error && res.error.code)}).`);
         return;
       }
-      dlg = res.value;
+      setDialog(res.value);
       dlg.addEventHandler(Office.EventType.DialogMessageReceived, onDialogMessage);
-      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { dlg = null; showInPane(); }); // closed with its ✕
+      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { setDialog(null); showInPane(); }); // closed with its ✕
       poppedOut(bringBack);
     });
   }

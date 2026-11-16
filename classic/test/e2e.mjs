@@ -107,6 +107,20 @@ if (popT) {
   console.log('window shows the panel:', await pev(`!!(document.getElementById('swcFrame') && ${PF}.document.querySelector('#newBuild'))`), '| call from the window:',
     await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(s => ok('pending ' + s.pending.length + ', crews ' + s.crews.length + ', board ' + (s.board || []).length)).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`));
   console.log('assign from the window:', await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(r => ok(typeof r === 'object' && r.state ? 'ok' : JSON.stringify(r))).withFailureHandler(e => ok('FAIL ' + e.message)).act('setTonightColor', ['#ffff00', 'A']))`));
+  // Excel stalls (a call never comes back): the window stays connected, the call fails after the timeout, and the
+  // next call works. Then the side panel goes silent (no heartbeat): the window notices.
+  await ev(`window.__realRun = Excel.run; window.__stuck = []; Excel.run = fn => new Promise(go => window.__stuck.push(go)).then(() => window.__realRun(fn)), 1`);
+  await sleep(9000); // past the read cache
+  const t0 = Date.now();
+  const stalled = await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(() => ok('ok')).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`);
+  console.log('stalled Excel call from the window:', stalled, `(${Math.round((Date.now() - t0) / 1000)} s)`);
+  await sleep(Math.max(0, 70000 - (Date.now() - t0))); // the old window gave up after 60 s of waiting
+  await ev(`Excel.run = window.__realRun; window.__stuck.splice(0).forEach(go => go()), 1`); // Excel recovers: the stuck calls finish
+  console.log('window still connected after the stall:', await pev(`!!document.getElementById('swcFrame')`), '| next call:',
+    await pev(`new Promise(ok => ${PF}.google.script.run.withSuccessHandler(s => ok('ok, pending ' + s.pending.length)).withFailureHandler(e => ok('FAIL ' + e.message)).getState(true))`));
+  await pev(`window.__fromParent = () => {}, 1`); // the side panel's messages stop arriving
+  await sleep(40000);
+  console.log('after 40 s of silence, window says lost:', await pev(`document.body.innerText.includes('lost its connection')`));
   await pev('window.close(), 1');
   await sleep(2000);
   console.log('after closing the window, back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));
