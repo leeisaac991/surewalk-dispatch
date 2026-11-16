@@ -174,6 +174,8 @@ const PLACES = {
   'Target (Dobie)':       ['target', 'target (dobie)', 'target dobie', 'dobie target', 'target at dobie', 'the target', 'target on guad', 'target on guadalupe', 'ut target', 'target store'],
   'Dobie Twenty21':       ['dobie', 'dobie 21', 'dobie21', 'dobie twenty21', 'dobie twenty 21', 'dobie twenty one', 'dobie center'],
   'Castilian':            ['castilian', 'castillian', 'castillion'],
+
+  'The Otis Hotel':       ['otis hotel', 'the otis', 'otis', 'otis hotel austin', 'the otis austin'],
   '2400 Nueces':          ['2400 nueces', '2400 neuces', '2400 nucess', '2400 nuecues', '2400 nueces complex'],
   '26 West':              ['26 west', '26west'],
   'Legacy on Rio':        ['legacy on rio', 'legacy', 'legacy rio'],
@@ -352,6 +354,7 @@ const ZONE_OF = {
   "texas union": 'On', "trg": 'On', "utc": 'On',
 
   "somerset condos": 'West',
+  "the otis hotel": 'West',
   "avon at 22nd": 'West',
   "phi gamma delta": 'West',
   "stoneleigh condominiums": 'West',
@@ -510,9 +513,11 @@ function dropoffOnly_(text) {
   const t = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   return DROPOFF_ONLY.some(p => [p].concat(PLACES[p] || []).some(a => { const w = String(a).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); return w.length >= 5 && t.includes(' ' + w + ' '); }));
 }
+
+const NO_PICKUP_RE = /\botis\b/i;
 function offCampusPickup_(pickup) {
   if (!String(pickup || '').trim()) return false;
-  if (dropoffOnly_(pickup)) return true;
+  if (dropoffOnly_(pickup) || NO_PICKUP_RE.test(String(pickup))) return true;
   return zoneOf_(pickup) !== 'On';
 }
 
@@ -1115,12 +1120,35 @@ function reactionsOf_(m) {
 }
 
 function recentlyPosted_() {
-  const since = Date.now() / 1000 - CFG.EDIT_WINDOW_MIN * 60, posted = {};
-  recentMessages_().filter(m => m.ts >= since).forEach(m => m.text.replace(/\d[\d\s().-]{8,}\d/g, s => {
+  const since = Date.now() / 1000 - CFG.EDIT_WINDOW_MIN * 60;
+  return postsIn_(recentMessages_().filter(m => m.ts >= since), {});
+}
+
+function postsIn_(msgs, posted, first) {
+  msgs.forEach(m => String(m.text || '').split('\n').forEach(line => line.replace(/\d[\d\s().-]{8,}\d/g, (s, at) => {
     const digits = s.replace(/\D/g, '').slice(-10);
-    if (digits.length === 10 && !posted[digits]) posted[digits] = { t: fmtTime_(new Date(m.ts * 1000)), by: m.who, id: m.id };
-  }));
+    if (digits.length !== 10) return;
+
+    const route = /^\s*(.*?)\s*→\s*(.*?)\s*$/.exec(line.slice(at + s.length));
+    const post = { t: m.ts ? fmtTime_(new Date(m.ts * 1000)) : '', by: m.who || m.name, id: String(m.id), pickup: route ? route[1] : null, dropoff: route ? route[2] : null };
+    const e = posted[digits];
+    if (!e) posted[digits] = Object.assign({ posts: [post] }, post);
+    else if (!e.posts.some(p => p.id === post.id && p.pickup === post.pickup)) first ? e.posts.unshift(post) : e.posts.push(post);
+  })));
   return posted;
+}
+
+function samePostPlace_(a, b) {
+  if (placeKey_(a) === placeKey_(b)) return true;
+  const x = placeNorm_(a), y = placeNorm_(b);
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+}
+
+function postedFor_(posted, r) {
+  const hit = posted[String(r.phone || '').replace(/\D/g, '').slice(-10)];
+  if (!hit) return null;
+  const p = (hit.posts || [hit]).find(x => x.pickup == null || (samePostPlace_(x.pickup, r.pickup) && samePostPlace_(x.dropoff, r.dropoff)));
+  return p ? { t: p.t, by: p.by, id: p.id } : null;
 }
 
 function syncGroupMeQuietly_(pushed) {
@@ -1509,13 +1537,10 @@ function tagGroups_(rides, newMsgs) {
   const batches = loadBatches_();
   let posted = {};
   try { posted = Object.assign({}, recentlyPosted_()); } catch (e) {   }
-  (newMsgs || []).forEach(m => (m.text || '').replace(/\d[\d\s().-]{8,}\d/g, s => {
-    const d = s.replace(/\D/g, '').slice(-10);
-    if (d.length === 10) posted[d] = { id: m.id };
-  }));
+  postsIn_(newMsgs || [], posted, true);
   rides.forEach(r => {
-    const ph = String(r.phone).replace(/\D/g, '').slice(-10);
-    r.group = batches[r.id] || (posted[ph] && posted[ph].id ? 'gm' + posted[ph].id : null);
+    const p = postedFor_(posted, r);
+    r.group = batches[r.id] || (p && p.id ? 'gm' + p.id : null);
   });
 }
 
@@ -2751,7 +2776,7 @@ function getStateCore_(fast) {
   catch (e) {   }
   return {
 
-    pending: pending.map(r => Object.assign(r, { posted: posted[String(r.phone).replace(/\D/g, '').slice(-10)] || null,
+    pending: pending.map(r => Object.assign(r, { posted: postedFor_(posted, r),
       pPos: geo[placeKey_(r.pickup)] || 0, dPos: geo[placeKey_(r.dropoff)] || 0,
       offPickup: offCampusPickup_(r.pickup),
       cartNoGo: cartNoGo_(r.pickup) || cartNoGo_(r.dropoff) })),
