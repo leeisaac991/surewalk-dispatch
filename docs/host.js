@@ -420,7 +420,9 @@
       if (out.ops && out.ops.length) await applyOps(toExcelOps(out.ops, x.L));
       if (!out.ok) { lastPeek.key = ''; throw new Error(out.error || 'Error'); }
       if (peekKey) { lastPeek.key = peekKey; lastPeek.result = out.result; } else lastPeek.key = '';
-      if (out.result && typeof out.result === 'object' && 'build' in out.result) out.result.build = shownBuild(); // Settings ▸ Version: this build's time
+      // Settings ▸ Version: this build's time, on every state the page gets — getState's own, and the state that
+      // comes back with each action ({ result, state }); one left at the old BUILD_ID would show "New version available".
+      [out.result, out.result && out.result.state].forEach(s => { if (s && typeof s === 'object' && 'build' in s) s.build = shownBuild(); });
       return out.result;
     });
     chain = job.catch(() => {});
@@ -489,7 +491,7 @@
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-15 20:40:30'; // stamped by build.sh
+  const BUILT_AT = '2026-11-15 20:55:40'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
