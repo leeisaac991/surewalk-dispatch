@@ -1436,11 +1436,18 @@ function toldSkip_(who, ms) {
   return JSON.parse(SP_().getProperty('SKIP_WAITS') || '[]').some(w => w.who === who && w.told && ms - w.told < 15 * 60e3 && ms >= w.told - 60e3);
 }
 
+const COUNT_WORDS_ = { both: 2, two: 2, '2': 2, three: 3, '3': 3, four: 4, '4': 4,
+  all: 'all', everyone: 'all', everybody: 'all', them: 'all', em: 'all' };
+const COUNT_FILLER_ = new Set(['of', 'riders', 'rider', 'people', 'ppl', 'from', 'at', 'the']);
+
 function parseUpdate_(text) {
 
   text = String(text).replace(/\b(got|gotten)\s+(to|here|there)\b|\bpulled\s+up(\s+to)?\b/gi, ' at ');
   const w = msgWords_(text).flatMap(x => (x === 'p/u' ? [x] : x.split('/'))).filter(Boolean);
   while (w.length && LEAD_FILLER.has(w[0])) w.shift();
+
+  let count = null;
+  while (w.length > 1 && COUNT_WORDS_[w[0]] && !count) { count = COUNT_WORDS_[w.shift()]; while (w.length > 1 && COUNT_FILLER_.has(w[0]) && w[0] !== 'at') w.shift(); }
   if (!w.length) return null;
   let kind = isPickedWord_(w[0]) ? 'picked' : isDroppedWord_(w[0]) ? 'dropped' : isArrivedWord_(w[0]) ? 'at' : null;
   if (!kind) return null;
@@ -1453,8 +1460,17 @@ function parseUpdate_(text) {
   if (kind === 'dropped' && rest[0] === 'off') rest.shift();
   if (kind === 'at' && rest[0] === 'at') rest.shift();
   while (rest.length && (isEmptyWord_(rest[rest.length - 1]) || rest[rest.length - 1] === 'now')) rest.pop();
+
+  rest = rest.filter(x => {
+    const c = COUNT_WORDS_[x];
+    if (!c) return true;
+    if (typeof count !== 'number') count = c;
+    return false;
+  });
+  while (rest.length && (COUNT_FILLER_.has(rest[0]) || ['up', 'off'].includes(rest[0]))) rest.shift();
   const place = rest.join(' ');
-  return { kind, place: GROUP_WORDS.has(place) ? '' : place, group: GROUP_WORDS.has(place), both };
+  if (GROUP_WORDS.has(place)) return { kind, place: '', group: true, both, count: count || 'all' };
+  return { kind, place, group: !place && !!count, both, count };
 }
 
 const NAME_STOP_ = new Set(['the', 'and', 'all', 'both', 'them', 'him', 'her', 'his', 'she', 'they', 'up', 'off', 'now', 'here', 'there',
@@ -1747,7 +1763,19 @@ function applyUpdate_(sh, rides, m) {
     const allowed = p.length <= 5 ? 1 : p.length <= 9 ? 2 : 3;
     return p.length >= 3 && dmin <= allowed ? near.filter(x => x.d === dmin).map(x => x.r) : [];
   };
-  let cands, named = false;
+
+  const gid = r => r.group || 'p:' + r.pickupKey;
+  const N = typeof u.count === 'number' ? u.count : null;
+  const listOf = list => list.map(r => `${r.first} (${r.pickup})`).join(', ');
+  const todoOf = list => list.filter(r => !r.picked && (kind === 'picked' || u.both || !r.arrived || when.said));
+
+  const onlyReading = () => {
+    if (!open.length) return null;
+    if (u.count === 'all') return open;
+    if (N) { const t = todoOf(open); return t.length === N ? t : open.length === N ? open : null; }
+    return new Set(open.map(gid)).size === 1 ? open : null;
+  };
+  let cands, named = false, guess = '';
   if (place) {
     cands = byPlace(open);
     if (!cands.length) cands = byPlace(mine);
@@ -1758,20 +1786,34 @@ function applyUpdate_(sh, rides, m) {
     }
     if (!cands.length) {
       const old = byPlace(tooOld);
-      return { ok: false, result: old.length ? oldMsg(old) : `No crew ride picking up at "${place}"` };
+      if (old.length) return { ok: false, result: oldMsg(old) };
+      cands = onlyReading();
+      if (!cands) return { ok: false, result: `No crew ride picking up at "${place}"` + (open.length ? ` — open: ${listOf(open)}` : '') };
+      guess = `"${place}" isn't any of their pickups; took ${names(cands)} (${u.count ? 'the ' + (N || 'all') + ' they have out' : 'their only group out'})`;
     }
   } else {
     if (!open.length) return { ok: true, result: `Already done in the sheet: ${names(mine.slice(-4))}` };
 
-    const gid = r => r.group || 'p:' + r.pickupKey;
     const oldest = open.reduce((a, b) => (a.row < b.row ? a : b));
-    cands = open.filter(r => gid(r) === gid(oldest));
+    cands = u.count === 'all' ? open : open.filter(r => gid(r) === gid(oldest));
   }
 
-  const todo = cands.filter(r => !r.picked && (kind === 'picked' || u.both || !r.arrived || when.said));
+  if (N && cands.length < N && !guess) {
+    const others = open.filter(r => !cands.includes(r)), sameGroup = others.filter(r => cands.some(c => gid(c) === gid(r)));
+    const add = cands.length + sameGroup.length === N ? sameGroup : cands.length + others.length === N ? others : null;
+    if (add) {
+      if (place && !named) guess = `said ${N}, but only ${names(cands)} pick${cands.length === 1 ? 's' : ''} up at "${place}" — also took ${listOf(add)}`;
+      cands = cands.concat(add);
+    } else guess = `said ${N}, found ${cands.length}: ${names(cands)}` + (others.length ? ` (also out: ${listOf(others)})` : '');
+  }
+
+  const todo = todoOf(cands);
   if (!todo.length) return { ok: true, rows: cands.map(r => r.row), ids: cands.map(r => r.id), result: `Already done in the sheet: ${names(cands)}` };
   cands = todo;
-  if (!u.group && !named && new Set(cands.map(r => r.pickupKey)).size > 1) {
+  if (N && cands.length > N && !guess) return { ok: false, result: `Said ${N}, but ${cands.length} match — which? ${listOf(cands)}` };
+
+  const settled = u.group || named || guess || (N && cands.length <= N) || u.count === 'all';
+  if (!settled && new Set(cands.map(r => r.pickupKey)).size > 1) {
 
     const listed = place && placeList_(place, cands);
     if (!listed) return { ok: false, result: 'Which one? ' + cands.map(r => `${r.first} (${r.pickup})`).join(', ') };
@@ -1798,8 +1840,9 @@ function applyUpdate_(sh, rides, m) {
   }
   const said = when.said ? ` (said ${fmtTime_(new Date(ms))})` : '';
   const result = `${kind === 'at' ? 'Arrived' : u.both ? 'At + picked' : 'Picked'}${said}: ${cands.map(r => r.first).join(', ')}`;
-  return conflicts.length
-    ? { ok: false, rows: cands.map(r => r.row), ids: cands.map(r => r.id), result: `${result} — ${conflicts.join(', ')}; message says ${fmtTime_(new Date(ms))}. Fix Arrival by hand if needed.` }
+  const notes = (guess ? ['check: ' + guess] : []).concat(conflicts.length ? [`${conflicts.join(', ')}; message says ${fmtTime_(new Date(ms))}. Fix Arrival by hand if needed.`] : []);
+  return notes.length
+    ? { ok: false, rows: cands.map(r => r.row), ids: cands.map(r => r.id), result: `${result} — ${notes.join(' · ')}` }
     : { ok: true, rows: cands.map(r => r.row), ids: cands.map(r => r.id), result };
 }
 

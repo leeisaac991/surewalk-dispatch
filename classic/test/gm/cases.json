@@ -1,0 +1,366 @@
+[
+ {
+  "name": "A: two riders, both at Gregory Gym",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gymnasium"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "B: one at Greg, one at Jester",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester West"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo — check: said 2, but only Maya picks up at \"greg\" — also took Leo (Jester West)",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "C: two at Greg, one more later group at Kins",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Zoe",
+    "pickup": "Kinsolving"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "D: pickup typed as 'Greg' by the rider",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "greg"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory gym front"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo — check: said 2, but only Maya picks up at \"greg\" — also took Leo (Gregory gym front)",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "E: driver is named Greg (crew member name in text)",
+  "text": "at/picked both greg",
+  "from": "Greg Smith",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL"
+   },
+   {
+    "first": "Leo",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo — check: \"greg\" isn't any of their pickups; took Maya, Leo (the 2 they have out)",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "F: 'both at greg'",
+  "text": "both at greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   }
+  ],
+  "expect": "Arrived: Maya, Leo",
+  "writes": "arrive row 100 22:30; arrive row 101 22:30"
+ },
+ {
+  "name": "G: 'at and picked both from greg'",
+  "text": "at and picked both from greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "H: 'at / picked both @ greg'",
+  "text": "at / picked both @ greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "I: 'At/Picked both greg' with one already arrived",
+  "text": "At/Picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym",
+    "arrived": "22:25"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "J: 'picked both' no place, two rides different pickups sent together",
+  "text": "picked both",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym",
+    "group": "g1"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester",
+    "group": "g1"
+   }
+  ],
+  "expect": "Picked: Maya, Leo",
+  "writes": "pick row 100; pick row 101"
+ },
+ {
+  "name": "K: 'at/picked both greg' — Greg ride + a ride to Greg (dropoff)",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym",
+    "dropoff": "Jester"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester",
+    "dropoff": "Gregory Gym"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo — check: said 2, but only Maya picks up at \"greg\" — also took Leo (Jester)",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "R1: plain 'at jester' one ride",
+  "text": "at jester",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Jester West"
+   },
+   {
+    "first": "Leo",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "Arrived: Maya",
+  "writes": "arrive row 100 22:30"
+ },
+ {
+  "name": "R2: 'picked up twanda' by name",
+  "text": "picked up twanda",
+  "rides": [
+   {
+    "first": "Twanda",
+    "pickup": "PCL"
+   },
+   {
+    "first": "Leo",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "Picked: Twanda",
+  "writes": "pick row 100"
+ },
+ {
+  "name": "R3: list 'at pcl/greg'",
+  "text": "at pcl/greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Zoe",
+    "pickup": "Jester"
+   }
+  ],
+  "expect": "Arrived: Maya, Leo",
+  "writes": "arrive row 100 22:30; arrive row 101 22:30"
+ },
+ {
+  "name": "R4: 'at jester' two different Jesters → ask",
+  "text": "at jester",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Jester West"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester East"
+   }
+  ],
+  "expect": "Arrived: Leo",
+  "writes": "arrive row 101 22:30"
+ },
+ {
+  "name": "R5: 'picked both greg' but 3 at greg → ask",
+  "text": "picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Gregory Gym"
+   },
+   {
+    "first": "Zoe",
+    "pickup": "Gregory Gym"
+   }
+  ],
+  "expect": "Said 2, but 3 match — which? Maya (Gregory Gym), Leo (Gregory Gym), Zoe (Gregory Gym)",
+  "writes": ""
+ },
+ {
+  "name": "R6: unknown place, crew has 2 groups → no guess, lists open",
+  "text": "at blorb",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL",
+    "group": "a"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester",
+    "group": "b"
+   }
+  ],
+  "expect": "No crew ride picking up at \"blorb\" — open: Maya (PCL), Leo (Jester)",
+  "writes": ""
+ },
+ {
+  "name": "R7: unknown place, one ride out → guess",
+  "text": "at the circle",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "Arrived: Maya — check: \"circle\" isn't any of their pickups; took Maya (their only group out)",
+  "writes": "arrive row 100 22:30"
+ },
+ {
+  "name": "R8: 'picked them up'",
+  "text": "picked them up",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL",
+    "group": "a"
+   },
+   {
+    "first": "Leo",
+    "pickup": "PCL",
+    "group": "a"
+   }
+  ],
+  "expect": "Picked: Maya, Leo",
+  "writes": "pick row 100; pick row 101"
+ },
+ {
+  "name": "R9: 'all good' is chatter",
+  "text": "all good",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": null,
+  "writes": ""
+ },
+ {
+  "name": "R10: 'picked 2 min ago' (time, not a count)",
+  "text": "picked 2 min ago",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "Picked (said 22:28): Maya",
+  "writes": "pick row 100"
+ },
+ {
+  "name": "R11: 'at/picked both greg' one already picked by hand, other at Jester",
+  "text": "at/picked both greg",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Gregory Gym",
+    "picked": true,
+    "arrived": "22:20"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester West"
+   }
+  ],
+  "expect": "At + picked: Leo — check: said 2, but only Maya picks up at \"greg\" — also took Leo (Jester West)",
+  "writes": "arrive row 101 22:30; pick row 101 (same minute)"
+ }
+]
