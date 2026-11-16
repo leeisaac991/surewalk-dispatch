@@ -418,6 +418,11 @@
   .tag { display: inline-block; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; margin-left: 4px; vertical-align: 1px; }
   .tag.ada { background: var(--red-bg); color: var(--red); }
   
+  
+  .tag.tx-ok { background: var(--green-bg); color: var(--green-text); }
+  .tag.tx-wait { background: var(--break-bg); color: var(--break); }
+  .tag.tx-none { background: var(--amber-bg); color: var(--amber); }
+  .tag.tx-other { background: var(--fill); color: var(--label2); }
   .rsub .tag.ada, .sugg-main .tag.ada { background: var(--red); color: #fff; font-weight: 800; padding: 2px 8px; letter-spacing: .01em; }
   .prow.ada { background: color-mix(in srgb, var(--red) 13%, transparent); box-shadow: inset 5px 0 0 var(--red); }
   .prow.ada.sel { background: color-mix(in srgb, var(--red) 22%, var(--accent-bg)); }
@@ -1286,11 +1291,27 @@
   }
 
   const justMoody = s => { const w = String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').split(/\s+/).filter(x => x && !['the', 'at', 'bldg', 'building', 'hall', 'please'].includes(x)); return w.length === 1 && w[0] === 'moody'; };
+
+  function txChip(r) {
+    const s = String(r.txs || '').trim(), m = /^(confirmed|texted|no reply|replied|opted out|cancelled by text)\b\s*(\d{1,2}:\d{2})?/i.exec(s);
+    if (!m) return '';
+    const kind = m[1].toLowerCase(), at = m[2] || '';
+    const mins = (() => { if (!at) return null; const [h, mi] = at.split(':').map(Number), d = new Date(), now = d.getHours() * 60 + d.getMinutes();
+      const diff = (now - (h * 60 + mi) + 1440) % 1440; return diff < 720 ? diff : null; })();
+    const ago = mins == null ? '' : mins < 1 ? ' just now' : ` ${mins}m`;
+    const [cls, label, tip] = kind === 'confirmed' ? ['tx-ok', '✓ Confirmed', `Replied YES to the text at ${at}`]
+      : kind === 'texted' ? ['tx-wait', `Texted${ago}`, `Confirmation text sent at ${at}; no answer yet`]
+      : kind === 'no reply' ? ['tx-none', `! No reply${ago}`, `Texted at ${at} and hasn't answered: call them`]
+      : kind === 'replied' ? ['tx-other', 'Replied, no YES', `Answered at ${at} but didn't confirm: see the texting dashboard`]
+      : kind === 'opted out' ? ['tx-other', 'Opted out', 'Replied STOP: no texts, call them']
+      : ['tx-other', 'Cancelled by text', 'Cancelled by replying to the text'];
+    return `<span class="tag ${cls}" title="${esc(tip)}">${esc(label)}</span>`;
+  }
   function rideBody(r, extra) {
     if (justMoody(r.pickup) || justMoody(r.dropoff)) extra = `<span class="tag posted" title="Just “Moody”: the Moody Center (arena) or DMC (Dealey Center)? Check with the rider">Moody: Center or DMC?</span>` + (extra || '');
     const zone = r.zone || r.loc || 'Off';
     return `<div class="rroute">${esc(r.pickup)}<span class="arrow">→</span>${esc(r.dropoff)}<span class="tag zone" title="Location (from the drop-off; unknown places count as Off)">${esc(zone)}</span></div>
-      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${extra || ''}</div>`;
+      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${txChip(r)}${extra || ''}</div>`;
   }
   function pendingRow(r, counts, fresh) {
     return `
@@ -2196,7 +2217,7 @@
     renderGmSetup(true);
   }
   function syncClick() {
-    if (!state.groupme.enabled) return;
+    if (!gmConnected()) return;
     const on = !state.groupme.running;
     if (!on) stopLive();
     doAct('setSyncRunning', [on], s => { s.groupme.running = on; });
@@ -3231,13 +3252,16 @@ show();
 
   const gsu = { step: 1, groups: null, groupsErr: '', err: '', busy: false, changing: false, justConnected: false, stripOff: false,
     panelUrl: '', hashChecked: false, sig: {} };
-  const gmHasToken = () => !!(state && state.groupme && state.groupme.tokenHint);
-  const gmNeedsSetup = () => !!state && (!state.groupme.enabled || gsu.changing);
+
+  const gmTokenBad = () => !!state && !!state.groupme.tokenHint && (gsu.tokenBad || /token rejected/i.test(state.groupme.error || ''));
+  const gmHasToken = () => !!(state && state.groupme && state.groupme.tokenHint) && !gmTokenBad();
+  const gmConnected = () => !!state && state.groupme.enabled && !gmTokenBad();
+  const gmNeedsSetup = () => !!state && (!gmConnected() || gsu.changing);
 
   const BM_COPY = "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');navigator.clipboard.writeText(t).then(()=>alert('GroupMe token copied. Paste it in the SURE Walk panel.'),()=>prompt('Copy your GroupMe token:',t))})()";
   const bmSend = url => "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');window.open(" + JSON.stringify(url).replace(/'/g, '%27') + "+'#gmtoken='+encodeURIComponent(t),'surewalk-panel')})()";
   function gmStepsHtml(p) {
-    const g = state.groupme, has = gmHasToken(), connected = g.enabled && !gsu.changing;
+    const g = state.groupme, has = gmHasToken(), connected = gmConnected() && !gsu.changing;
     const done = { 1: has || gsu.step > 1, 2: has, 3: connected };
     const steps = [[1, 'Copy your token', 'From GroupMe on the web'],
       [2, 'Paste it here', has ? `Token saved (…${esc(g.tokenHint)})` : 'Saved on this computer'],
@@ -3288,10 +3312,11 @@ show();
       ${gsu.changing && state.groupme.enabled ? `<button class="link" onclick="gsuCancelChange()">Keep the current chat (${esc(state.groupme.groupName)})</button>` : ''}`;
   }
   function gmSetupHtml(p) {
-    const chatOnly = gmHasToken();
-    return `<div class="gs-left"><span class="gs-tag">${chatOnly ? 'Almost done' : 'Setup needed'}</span>
-        <div class="gs-title">${chatOnly ? 'Choose the GroupMe dispatch chat' : 'Connect GroupMe to start dispatching'}</div>
-        <p class="gs-intro">${chatOnly ? 'Your GroupMe token is saved. Pick the chat crews post in and GroupMe sync turns on.'
+    const chatOnly = gmHasToken(), bad = gmTokenBad();
+    return `<div class="gs-left"><span class="gs-tag">${bad ? 'Token expired' : chatOnly ? 'Almost done' : 'Setup needed'}</span>
+        <div class="gs-title">${bad ? 'Reconnect GroupMe' : chatOnly ? 'Choose the GroupMe dispatch chat' : 'Connect GroupMe to start dispatching'}</div>
+        <p class="gs-intro">${bad ? `GroupMe rejected the saved token (…${esc(state.groupme.tokenHint)}): it expired or you logged out. Copy a fresh one; ride posts, ❤️ acknowledgements and crew updates all need it.`
+          : chatOnly ? 'Your GroupMe token is saved. Pick the chat crews post in and GroupMe sync turns on.'
           : 'No GroupMe token was found on this computer. Ride posts, ❤️ acknowledgements and crew updates all need it. Takes about a minute.'}</p>
         <div class="gs-rail">${gmStepsHtml(p)}</div></div>
       <div class="gs-right">${gmStepBody(p)}</div>`;
@@ -3301,8 +3326,17 @@ show();
     if (!state) return;
     const need = gmNeedsSetup(), g = state.groupme;
     document.body.classList.toggle('gm-setup', need);
-    $('gmNotConn').hidden = !!g.enabled;
-    const sig = JSON.stringify([need, gsu.step, gsu.groups, gsu.groupsErr, gsu.err, gsu.busy, gsu.changing, gsu.panelUrl, g.tokenHint, g.groupName, g.enabled]);
+    $('gmNotConn').hidden = gmConnected();
+    if (gmTokenBad()) {
+      $('syncBtn').className = 'pill locked'; $('syncBtn').innerHTML = `<span class="ico">${ICONS.lock}</span>GroupMe sync`;
+      $('syncBtn').title = 'Connect GroupMe first'; $('syncBtn').setAttribute('aria-disabled', 'true');
+      if (gsu.step === 3 || gsu.step === 2 && !gsu.err) gsu.step = gsu.step === 3 ? 1 : gsu.step;
+    }
+    if (!gsu.tokenAsked && g.tokenHint) {
+      gsu.tokenAsked = true;
+      callQuiet('checkGroupMeToken').then(r => { if (r && r.rejected) { gsu.tokenBad = true; gsu.step = 1; stopLive(); renderGmSetup(true); } }).catch(() => {});
+    }
+    const sig = JSON.stringify([need, gsu.step, gsu.groups, gsu.groupsErr, gsu.err, gsu.busy, gsu.changing, gsu.panelUrl, g.tokenHint, g.groupName, g.enabled, gmTokenBad()]);
     const draw = (box, p, extra) => {
       if (!force && gsu.sig[p] === sig && box.firstChild) return;
       gsu.sig[p] = sig;
@@ -3317,16 +3351,16 @@ show();
     if (need) draw(card, 'pg'); else { card.innerHTML = ''; gsu.sig.pg = ''; }
 
     const st = $('gmStatusCard');
-    st.className = 'set-group gm-status ' + (g.enabled ? 'ok' : 'bad');
-    $('gmConnTitle').textContent = g.enabled ? 'Connected' : has_() ? 'Choose the dispatch chat' : 'Not connected';
-    $('gmForgetBtn').hidden = !gmHasToken();
+    st.className = 'set-group gm-status ' + (gmConnected() ? 'ok' : 'bad');
+    $('gmConnTitle').textContent = gmConnected() ? 'Connected' : gmTokenBad() ? 'Token rejected by GroupMe' : has_() ? 'Choose the dispatch chat' : 'Not connected';
+    $('gmForgetBtn').hidden = !state.groupme.tokenHint;
     $('gmFields').hidden = !gmHasToken();
     const inSet = $('gmSetupInSettings');
     if (!gmHasToken() && !$('settingsSheet').hidden && setCatNow === 'groupme') draw(inSet, 'st', ' in-set');
     else if (gmHasToken()) { inSet.innerHTML = ''; inSet.className = ''; gsu.sig.st = ''; }
 
     const strip = $('gmStrip');
-    strip.hidden = !(g.enabled && !gsu.changing && gsu.justConnected && !gsu.stripOff);
+    strip.hidden = !(gmConnected() && !gsu.changing && gsu.justConnected && !gsu.stripOff);
     if (!strip.hidden) strip.innerHTML = `<span class="ico">${ICONS.checkCircle}</span><span class="t">GroupMe sync is ${g.running ? 'on' : 'off'} · connected to <b>${esc(g.groupName)}</b></span>
       <button onclick="gsuChangeChat()">Change chat</button><button onclick="gsu.stripOff = true; renderGmSetup()" aria-label="Dismiss">✕</button>`;
     if (!gsu.hashChecked) { gsu.hashChecked = true; gmTokenFromAddress(); }
@@ -3375,7 +3409,7 @@ show();
       status('', false);
       return renderGmSetup(true);
     }
-    gsu.busy = false; gsu.step = 3; gsu.groups = null; gsu.groupsErr = '';
+    gsu.busy = false; gsu.step = 3; gsu.groups = null; gsu.groupsErr = ''; gsu.tokenBad = false;
     gsu.changing = true;
     if (source === 'bookmark') gsToast('GroupMe token received');
     renderGmSetup(true);
