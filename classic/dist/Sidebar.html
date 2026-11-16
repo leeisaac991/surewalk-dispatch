@@ -204,6 +204,32 @@
   .gs-grp .ico { color: var(--muted); }
   .gs-grp .gs-gt { flex: 1; min-width: 0; } .gs-grp .gs-gt b { display: block; } .gs-grp .gs-gt span { font-size: 12px; color: var(--muted); }
   .gs-sugg { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); }
+  
+  .gm-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .gm-modal[hidden] { display: none; }
+  body.gm-modal-open { overflow: hidden; }
+  .gm-card { position: relative; width: min(560px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--card); color: var(--text);
+    border-radius: 16px; padding: 28px 28px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  .gm-card h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .gm-sub { color: var(--label2); margin: 0 0 20px; font-size: 14px; }
+  .gm-steps { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 16px; }
+  .gm-steps li { display: flex; gap: 12px; align-items: flex-start; }
+  .gm-n { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); font-weight: 700; flex: none;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .gm-st { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 4px; flex: 1; min-width: 0; font-size: 15px; }
+  .gm-open { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; background: var(--accent); color: #fff;
+    font-weight: 600; text-decoration: none; }
+  .gm-wait { color: var(--muted); font-size: 13px; }
+  .gm-bmname { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--accent); }
+  .gm-bmname .ico { width: 15px; height: 15px; }
+  .gm-st .gs-tok { width: 100%; }
+  .gm-help { border-top: .5px solid var(--sep); padding-top: 12px; margin-top: 4px; }
+  .gm-help summary { cursor: pointer; color: var(--accent); font-weight: 500; font-size: 13.5px; }
+  .gm-help p { font-size: 13px; color: var(--label2); margin: 10px 0 8px; }
+  .gm-x { position: absolute; top: 14px; right: 14px; }
+  .gm-card .gs-grps { margin: 0; }
+  @media (max-width: 640px) { .gm-modal { padding: 0; align-items: stretch; } .gm-card { width: 100%; max-height: none; border-radius: 0; padding: 24px 18px; } }
   .gm-strip { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin: 0 0 12px; border-radius: 12px; background: var(--green-bg); color: var(--green-text); font-size: 13.5px; }
   .gm-strip .t { flex: 1; } .gm-strip button { background: none; color: inherit; font-weight: 600; }
   @media (max-width: 700px) { .gsetup { grid-template-columns: 1fr; } .gs-left { border-right: 0; border-bottom: .5px solid var(--sep); } }
@@ -1293,19 +1319,20 @@
   const justMoody = s => { const w = String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').split(/\s+/).filter(x => x && !['the', 'at', 'bldg', 'building', 'hall', 'please'].includes(x)); return w.length === 1 && w[0] === 'moody'; };
 
   function txChip(r) {
-    const s = String(r.txs || '').trim(), m = /^(confirmed|texted|no reply|replied|opted out|cancelled by text)\b\s*(\d{1,2}:\d{2})?/i.exec(s);
-    if (!m) return '';
-    const kind = m[1].toLowerCase(), at = m[2] || '';
-    const mins = (() => { if (!at) return null; const [h, mi] = at.split(':').map(Number), d = new Date(), now = d.getHours() * 60 + d.getMinutes();
-      const diff = (now - (h * 60 + mi) + 1440) % 1440; return diff < 720 ? diff : null; })();
-    const ago = mins == null ? '' : mins < 1 ? ' just now' : ` ${mins}m`;
-    const [cls, label, tip] = kind === 'confirmed' ? ['tx-ok', '✓ Confirmed', `Replied YES to the text at ${at}`]
-      : kind === 'texted' ? ['tx-wait', `Texted${ago}`, `Confirmation text sent at ${at}; no answer yet`]
-      : kind === 'no reply' ? ['tx-none', `! No reply${ago}`, `Texted at ${at} and hasn't answered: call them`]
-      : kind === 'replied' ? ['tx-other', 'Replied, no YES', `Answered at ${at} but didn't confirm: see the texting dashboard`]
-      : kind === 'opted out' ? ['tx-other', 'Opted out', 'Replied STOP: no texts, call them']
-      : ['tx-other', 'Cancelled by text', 'Cancelled by replying to the text'];
-    return `<span class="tag ${cls}" title="${esc(tip)}">${esc(label)}</span>`;
+    if (!r.txsCol) return '';
+    const minsSince = hm => { const m = /(\d{1,2}):(\d{2})\s*([AP]M)?/i.exec(String(hm || '')); if (!m) return null;
+      let h = +m[1]; if (m[3]) h = (h % 12) + (/pm/i.test(m[3]) ? 12 : 0);
+      const d = new Date(), diff = (d.getHours() * 60 + d.getMinutes() - (h * 60 + +m[2]) + 1440) % 1440; return diff < 720 ? diff : null; };
+    const c = String(r.txs || '').trim();
+    if (c) {
+      const t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(c);
+      return `<span class="tag tx-ok" title="Confirmed by text${t ? ' at ' + esc(t[0]) : ''}">✓ Confirmed${t ? ' ' + esc(t[1]) : ''}</span>`;
+    }
+    if (r.driver || r.picked || !r.call || r.disp) return '';
+    const m = minsSince(r.call);
+    if (m == null) return '';
+    return m >= 10 ? `<span class="tag tx-none" title="Texted at ${esc(r.call)}, no YES yet: call them">! Not confirmed ${m}m</span>`
+      : `<span class="tag tx-wait" title="Texted at ${esc(r.call)}, waiting for their YES">Texted ${m < 1 ? 'just now' : m + 'm'}</span>`;
   }
   function rideBody(r, extra) {
     if (justMoody(r.pickup) || justMoody(r.dropoff)) extra = `<span class="tag posted" title="Just “Moody”: the Moody Center (arena) or DMC (Dealey Center)? Check with the rider">Moody: Center or DMC?</span>` + (extra || '');
@@ -2213,7 +2240,8 @@
     if (!(await ask('Remove the saved GroupMe token? Sync stops until you paste a new one.', 'Forget token', true))) return;
     stopLive();
     await run('forgetGroupMeToken');
-    Object.assign(gsu, { step: 1, groups: null, err: '', busy: false, changing: false, justConnected: false });
+    Object.assign(gsu, { step: 1, groups: null, err: '', busy: false, changing: false, justConnected: false, opened: false, tokenBad: false });
+    closeSettings();
     renderGmSetup(true);
   }
   function syncClick() {
@@ -3260,72 +3288,50 @@ show();
 
   const BM_COPY = "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');navigator.clipboard.writeText(t).then(()=>alert('GroupMe token copied. Paste it in the SURE Walk panel.'),()=>prompt('Copy your GroupMe token:',t))})()";
   const bmSend = url => "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');window.open(" + JSON.stringify(url).replace(/'/g, '%27') + "+'#gmtoken='+encodeURIComponent(t),'surewalk-panel')})()";
-  function gmStepsHtml(p) {
-    const g = state.groupme, has = gmHasToken(), connected = gmConnected() && !gsu.changing;
-    const done = { 1: has || gsu.step > 1, 2: has, 3: connected };
-    const steps = [[1, 'Copy your token', 'From GroupMe on the web'],
-      [2, 'Paste it here', has ? `Token saved (…${esc(g.tokenHint)})` : 'Saved on this computer'],
-      [3, 'Choose the dispatch chat', connected ? esc(g.groupName) : 'Turns on GroupMe sync']];
-    return steps.map(([n, t, sub]) => `<button class="gs-step ${gsu.step === n ? 'on' : ''} ${done[n] && gsu.step !== n ? 'done' : ''}" ${n === 3 && !has ? 'disabled' : ''}
-        onclick="gsuGo(${n})" aria-current="${gsu.step === n ? 'step' : 'false'}"><span class="gs-num">${done[n] && gsu.step !== n ? `<span class="ico">${ICONS.check}</span>` : n}</span>
-        <span><b>${t}</b><span class="s">${sub}</span></span></button>`).join('');
-  }
-  function gmStepBody(p) {
-    if (gsu.step === 1) {
-      const send = !!gsu.panelUrl;
-      return `<div class="gs-box"><div class="gs-box-h">Quick way</div>
-          <a class="gs-bm" id="${p}-bm" draggable="true" onclick="bmClick(event, '${p}')"><span class="ico">${ICONS.bookmark}</span>Get GroupMe token</a>
-          <ol class="gs-ol"><li>Drag the button to your bookmarks bar (<kbd>Ctrl ⇧ B</kbd> shows the bar).</li>
-            <li>Open web.groupme.com, logged in, and click the bookmark.</li>
-            <li>${send ? 'The panel opens and connects. Pick the dispatch chat.' : 'The token is copied. Come back and paste it in step 2.'}</li></ol>
-          ${send ? `<div class="gs-small">Your token passes through the page address once and is removed right away. On a shared computer, use the
-            <a id="${p}-bm2" draggable="true" onclick="bmClick(event, '${p}')">copy-only bookmark</a> and paste it in step 2.</div>` : ''}
-          <div class="gs-flash" id="${p}-flash" role="status"></div>
-          <details class="gs-console"><summary>No bookmarks bar? Use the Console instead</summary>
-            <p>On web.groupme.com press <kbd>Ctrl ⇧ I</kbd> → Console, paste this and press Enter. Chrome may ask you to type "allow pasting" first.</p>
-            <div class="gs-code"><code>copy(localStorage.getItem('access_token'))</code><button onclick="copyConsole(this)">Copy</button></div></details></div>
-        <div class="gs-h4">Or step by step</div>
-        <ol class="gs-ol" style="margin-bottom:4px">
-          <li>Open GroupMe on the web and sign in. <a href="https://web.groupme.com" target="_blank" rel="noopener">Open web.groupme.com</a></li>
-          <li>Press <kbd>Ctrl ⇧ I</kbd> (Mac: <kbd>⌥ ⌘ I</kbd>), then click the <b>Network</b> tab.</li>
-          <li>Click any chat so requests appear. Pick one whose name starts with <code>api.groupme.com</code>. If the list is empty, refresh the page.</li>
-          <li>Under <b>Request Headers</b>, find <code>X-Access-Token</code> and copy its value.</li></ol>
-        <div class="gs-note"><span class="ico">${ICONS.lock}</span>The token works like a password for your GroupMe account. It's saved only on this computer. Don't paste it in a chat.</div>
-        <button class="primary" onclick="gsuGo(2)">I copied it →</button>`;
+
+  function gmModalHtml() {
+    const g = state.groupme, send = !!gsu.panelUrl, bad = gmTokenBad();
+    const err = gsu.err ? `<div class="gs-err" role="alert">${esc(gsu.err)}</div>` : '';
+    const close = gmConnected() && gsu.changing ? `<button class="closex gm-x" onclick="gsuCancelChange()" aria-label="Close">✕</button>` : '';
+    if (gsu.step === 3) {
+      const list = gsu.groups;
+      const best = list && list.length ? (list.find(x => /dispatch/i.test(x.name)) || list.slice().sort((a, b) => (b.active || 0) - (a.active || 0))[0]) : null;
+      return `${close}<h2 id="gmTitle">Pick the dispatch chat</h2><p class="gm-sub">Sync turns on when you pick.</p>
+        ${gsu.groupsErr ? `<div class="gs-err" role="alert">${esc(gsu.groupsErr)} <button class="link" onclick="gsuLoadGroups()">Try again</button></div>` : ''}
+        ${!list && !gsu.groupsErr ? '<div class="muted">Loading your chats…</div>' : ''}
+        ${list ? `<div class="gs-grps">${list.length ? list.map(x => `<button class="gs-grp" onclick='gsuPick(${JSON.stringify(String(x.id))})' ${gsu.busy ? 'disabled' : ''}>
+            <span class="gs-gt"><b>${esc(x.name)}</b></span>${best && x.id === best.id ? '<span class="gs-sugg">Suggested</span>' : ''}</button>`).join('')
+          : '<div class="muted">No chats on this GroupMe account.</div>'}</div>` : ''}`;
     }
     if (gsu.step === 2) {
-      return `<label class="set-lab" for="${p}-tok">X-Access-Token</label>
-        <div class="field" style="margin-bottom:0"><input type="password" id="${p}-tok" class="gs-tok" placeholder="Paste here (Ctrl+V)" autocomplete="off" spellcheck="false"
-          onkeydown="if (event.key === 'Enter') gsuSave('${p}')"><button class="primary" onclick="gsuSave('${p}')" ${gsu.busy ? 'disabled' : ''}>${gsu.busy ? 'Checking…' : 'Save'}</button></div>
-        ${gsu.err ? `<div class="gs-err" role="alert">${esc(gsu.err)}</div>` : ''}
-        <button class="link" style="margin-top:10px" onclick="gsuGo(1)">Can't find it? Back to the walkthrough</button>`;
+      return `<h2 id="gmTitle">Paste your token</h2><p class="gm-sub">Needed for ride posts and crew updates.</p>
+        <div class="field" style="margin-bottom:0"><input type="password" id="pg-tok" class="gs-tok" placeholder="Paste token" autocomplete="off" spellcheck="false"
+          onkeydown="if (event.key === 'Enter') gsuSave('pg')"><button class="primary" onclick="gsuSave('pg')" ${gsu.busy ? 'disabled' : ''}>${gsu.busy ? 'Checking…' : 'Save'}</button></div>
+        ${err}<button class="link" style="margin-top:12px" onclick="gsuGo(1)">Back</button>`;
     }
-    const list = gsu.groups;
-    const best = list && list.length ? (list.find(x => /dispatch/i.test(x.name)) || list.slice().sort((a, b) => (b.active || 0) - (a.active || 0))[0]) : null;
-    const ago = sec => { if (!sec) return ''; const m = Math.max(0, Math.round((Date.now() / 1000 - sec) / 60)); return m < 60 ? `active ${m}m ago` : m < 2880 ? `active ${Math.round(m / 60)}h ago` : `active ${Math.round(m / 1440)}d ago`; };
-    return `<p style="margin:0 0 4px">Your groups are loaded. Pick the one crews post in. GroupMe sync turns on as soon as you choose.</p>
-      ${gsu.groupsErr ? `<div class="gs-err" role="alert">${esc(gsu.groupsErr)} <button class="link" onclick="gsuLoadGroups()">Try again</button></div>` : ''}
-      ${!list && !gsu.groupsErr ? '<div class="muted" style="margin:12px 0">Loading your groups…</div>' : ''}
-      ${list ? `<div class="gs-grps">${list.length ? list.map(x => `<button class="gs-grp" onclick='gsuPick(${JSON.stringify(String(x.id))})' ${gsu.busy ? 'disabled' : ''}>
-          <span class="ico">${ICONS.chat}</span><span class="gs-gt"><b>${esc(x.name)}</b><span>${[x.members ? x.members + ' members' : '', ago(x.active)].filter(Boolean).join(' · ')}</span></span>
-          ${best && x.id === best.id ? '<span class="gs-sugg">Suggested</span>' : ''}</button>`).join('') : '<div class="muted">No groups on this GroupMe account.</div>'}</div>` : ''}
-      ${gsu.changing && state.groupme.enabled ? `<button class="link" onclick="gsuCancelChange()">Keep the current chat (${esc(state.groupme.groupName)})</button>` : ''}`;
+    return `<h2 id="gmTitle">${bad ? 'Reconnect GroupMe' : 'Connect GroupMe'}</h2>
+      <p class="gm-sub">${bad ? 'The saved token stopped working. Get a fresh one.' : 'Needed for ride posts and crew updates.'}</p>
+      <ol class="gm-steps">
+        <li><span class="gm-n">1</span><span class="gm-st"><a class="gm-open" href="https://web.groupme.com" target="_blank" rel="noopener" onclick="gsuOpened()">Open GroupMe</a>
+          ${gsu.opened && send ? '<span class="gm-wait">Waiting…</span>' : ''}</span></li>
+        <li><span class="gm-n">2</span><span class="gm-st"><span>Click your <span class="gm-bmname"><span class="ico">${ICONS.bookmark}</span>Get GroupMe token</span> bookmark</span></span></li>
+        ${send ? '' : `<li><span class="gm-n">3</span><span class="gm-st"><label for="pg-tok">Come back and paste it here</label>
+          <input type="password" id="pg-tok" class="gs-tok" placeholder="Ctrl+V" autocomplete="off" spellcheck="false" ${gsu.busy ? 'disabled' : ''}
+            onpaste="setTimeout(() => gsuSave('pg'), 0)" onkeydown="if (event.key === 'Enter') gsuSave('pg')">
+          ${gsu.busy ? '<span class="gm-wait">Checking…</span>' : ''}</span></li>`}
+      </ol>
+      ${err}
+      <details class="gm-help"${gsu.helpOpen ? ' open' : ''} ontoggle="gsu.helpOpen = this.open"><summary>Need help?</summary>
+        <p>No bookmark yet? Drag this to your bookmarks bar:</p>
+        <a class="gs-bm" id="pg-bm" draggable="true" onclick="bmClick(event, 'pg')"><span class="ico">${ICONS.bookmark}</span>Get GroupMe token</a>
+        <div class="gs-flash" id="pg-flash" role="status"></div>
+        ${send ? '<p><button class="link" onclick="gsuGo(2)">I have the token, paste it instead</button></p>' : ''}
+      </details>`;
   }
-  function gmSetupHtml(p) {
-    const chatOnly = gmHasToken(), bad = gmTokenBad();
-    return `<div class="gs-left"><span class="gs-tag">${bad ? 'Token expired' : chatOnly ? 'Almost done' : 'Setup needed'}</span>
-        <div class="gs-title">${bad ? 'Reconnect GroupMe' : chatOnly ? 'Choose the GroupMe dispatch chat' : 'Connect GroupMe to start dispatching'}</div>
-        <p class="gs-intro">${bad ? `GroupMe rejected the saved token (…${esc(state.groupme.tokenHint)}): it expired or you logged out. Copy a fresh one; ride posts, ❤️ acknowledgements and crew updates all need it.`
-          : chatOnly ? 'Your GroupMe token is saved. Pick the chat crews post in and GroupMe sync turns on.'
-          : 'No GroupMe token was found on this computer. Ride posts, ❤️ acknowledgements and crew updates all need it. Takes about a minute.'}</p>
-        <div class="gs-rail">${gmStepsHtml(p)}</div></div>
-      <div class="gs-right">${gmStepBody(p)}</div>`;
-  }
-
   function renderGmSetup(force) {
     if (!state) return;
     const need = gmNeedsSetup(), g = state.groupme;
-    document.body.classList.toggle('gm-setup', need);
+    document.body.classList.toggle('gm-modal-open', need);
     $('gmNotConn').hidden = gmConnected();
     if (gmTokenBad()) {
       $('syncBtn').className = 'pill locked'; $('syncBtn').innerHTML = `<span class="ico">${ICONS.lock}</span>GroupMe sync`;
@@ -3337,18 +3343,17 @@ show();
       callQuiet('checkGroupMeToken').then(r => { if (r && r.rejected) { gsu.tokenBad = true; gsu.step = 1; stopLive(); renderGmSetup(true); } }).catch(() => {});
     }
     const sig = JSON.stringify([need, gsu.step, gsu.groups, gsu.groupsErr, gsu.err, gsu.busy, gsu.changing, gsu.panelUrl, g.tokenHint, g.groupName, g.enabled, gmTokenBad()]);
-    const draw = (box, p, extra) => {
-      if (!force && gsu.sig[p] === sig && box.firstChild) return;
-      gsu.sig[p] = sig;
-      const keep = document.activeElement && document.activeElement.id === p + '-tok';
-      box.className = 'gsetup' + (extra || '');
-      box.innerHTML = gmSetupHtml(p);
-      [p + '-bm', p + '-bm2'].forEach((id, i) => { const a = $(id); if (a) a.setAttribute('href', i === 0 && gsu.panelUrl ? bmSend(gsu.panelUrl) : BM_COPY); });
-      if (keep && $(p + '-tok')) $(p + '-tok').focus();
-    };
     const card = $('gmSetup');
     card.hidden = !need;
-    if (need) draw(card, 'pg'); else { card.innerHTML = ''; gsu.sig.pg = ''; }
+    if (need && (force || gsu.sig.pg !== sig || !card.firstChild)) {
+      gsu.sig.pg = sig;
+      const keep = document.activeElement && document.activeElement.id === 'pg-tok';
+      card.className = 'gm-modal';
+      card.innerHTML = `<div class="gm-card" role="dialog" aria-modal="true" aria-labelledby="gmTitle">${gmModalHtml()}</div>`;
+
+      const a = $('pg-bm'); if (a) a.setAttribute('href', gsu.panelUrl ? bmSend(gsu.panelUrl) : BM_COPY);
+      if ((keep || gsu.step === 2) && $('pg-tok')) $('pg-tok').focus();
+    } else if (!need) { card.innerHTML = ''; gsu.sig.pg = ''; }
 
     const st = $('gmStatusCard');
     st.className = 'set-group gm-status ' + (gmConnected() ? 'ok' : 'bad');
@@ -3356,8 +3361,7 @@ show();
     $('gmForgetBtn').hidden = !state.groupme.tokenHint;
     $('gmFields').hidden = !gmHasToken();
     const inSet = $('gmSetupInSettings');
-    if (!gmHasToken() && !$('settingsSheet').hidden && setCatNow === 'groupme') draw(inSet, 'st', ' in-set');
-    else if (gmHasToken()) { inSet.innerHTML = ''; inSet.className = ''; gsu.sig.st = ''; }
+    inSet.innerHTML = gmHasToken() ? '' : `<button class="primary" style="margin-top:12px" onclick="closeSettings(); showGmSetup(1)">Connect GroupMe</button>`;
 
     const strip = $('gmStrip');
     strip.hidden = !(gmConnected() && !gsu.changing && gsu.justConnected && !gsu.stripOff);
@@ -3371,9 +3375,16 @@ show();
   function showGmSetup(step) {
     if (step) gsu.step = step;
     renderGmSetup(true);
-    const c = $('gmSetup');
-    if (!c.hidden) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  function gsuOpened() { gsu.opened = true; setTimeout(() => renderGmSetup(true), 50); }
+
+  window.addEventListener('focus', () => { if (!$('gmSetup').hidden && gsu.step === 1 && $('pg-tok') && !gsu.busy) $('pg-tok').focus(); });
+  document.addEventListener('paste', e => {
+    if ($('gmSetup').hidden || gsu.step === 3 || gsu.busy || (e.target && e.target.id === 'pg-tok')) return;
+    const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (cleanToken(t).length >= 20) { e.preventDefault(); gsuSave(null, t); }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('gmSetup').hidden && gmConnected() && gsu.changing) gsuCancelChange(); });
   function gsuGo(n) {
     if (n === 3 && !gmHasToken()) return;
     gsu.step = n; gsu.err = '';
@@ -3383,7 +3394,7 @@ show();
   function bmClick(e, p) {
     e.preventDefault();
     const f = $(p + '-flash'); if (!f) return;
-    f.textContent = 'Drag it to the bookmarks bar; clicking here does nothing.';
+    f.textContent = "Drag it, don't click it.";
     clearTimeout(f._t); f._t = setTimeout(() => { f.textContent = ''; }, 2500);
   }
   async function copyConsole(btn) {
@@ -3396,16 +3407,14 @@ show();
 
   async function gsuSave(p, raw, source) {
     const box = p && $(p + '-tok'), token = cleanToken(raw != null ? raw : box ? box.value : '');
-    if (token.length < 20) {
-      gsu.step = 2; gsu.err = "That doesn't look like a full token. It's a long string of letters and numbers; copy the whole value after X-Access-Token.";
-      return renderGmSetup(true);
-    }
+    const back = () => { if (gsu.panelUrl || gsu.step === 2 || source === 'bookmark') gsu.step = 2; else gsu.step = 1; };
+    if (token.length < 20) { back(); gsu.err = 'That token looks incomplete. Try again.'; if (box) box.value = ''; return renderGmSetup(true); }
     gsu.busy = true; gsu.err = ''; renderGmSetup(true);
     try {
       await run('saveGroupMeToken', token);
     } catch (e) {
-      gsu.busy = false; gsu.step = 2;
-      gsu.err = /look like/.test(e.message || '') ? e.message : 'GroupMe didn’t accept that token. Copy it again (the whole value) and paste it here.';
+      gsu.busy = false; back();
+      gsu.err = 'That token looks incomplete. Try again.';
       status('', false);
       return renderGmSetup(true);
     }
@@ -3440,7 +3449,7 @@ show();
     gsu.changing = true; gsu.step = 3; gsu.groups = null;
     stopLive();
     if (state.groupme.running) await doAct('setSyncRunning', [false], s => { s.groupme.running = false; });
-    renderGmSetup(true); showGmSetup();
+    renderGmSetup(true);
   }
   function gsuCancelChange() { gsu.changing = false; renderGmSetup(true); }
   function gsToast(text) {

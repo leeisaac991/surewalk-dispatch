@@ -2660,7 +2660,7 @@ function tonight_() {
 
   let txs = null;
   try {
-    if (sh.getMaxColumns() >= COL.TXS && /^text\b/i.test(String(sh.getRange(1, COL.TXS).getDisplayValue()).trim())) txs = sh.getRange(first, COL.TXS, n, 1).getDisplayValues();
+    if (sh.getMaxColumns() >= COL.TXS && /^(confirmed|text)\b/i.test(String(sh.getRange(1, COL.TXS).getDisplayValue()).trim())) txs = sh.getRange(first, COL.TXS, n, 1).getDisplayValues();
   } catch (e) { txs = null; }
   const cutoff = Date.now() - CFG.LOOKBACK_HOURS * 3600e3;
   const editCutoff = Date.now() - CFG.EDIT_WINDOW_MIN * 60e3;
@@ -2692,7 +2692,7 @@ function tonight_() {
       pickup: get(COL.PICKUP), dropoff: get(COL.DROPOFF), ada: /yes/i.test(get(COL.ADA)),
       loc: get(COL.LOC), van: get(COL.VAN), driver: get(COL.DRIVER), nav: get(COL.NAV),
       arrived: get(COL.ARRIVE), call: get(COL.CALL),
-      txs: txs ? String(txs[i][0] || '').trim() : '',
+      txs: txs ? String(txs[i][0] || '').trim() : '', txsCol: !!txs, disp: get(COL.DISPATCH),
       pickupKey: placeKey_(get(COL.PICKUP)), dropoffKey: placeKey_(get(COL.DROPOFF)),
       pickupName: canonPlace_(get(COL.PICKUP)) || get(COL.PICKUP),
       zone: zoneOf_(get(COL.DROPOFF)),
