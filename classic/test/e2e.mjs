@@ -155,6 +155,10 @@ console.log('settings version line:', JSON.stringify(await ev(`(${F}.document.ge
 await ev(`(() => { const f = window.fetch; window.__realFetch = f; window.fetch = (u, o) => /version\.json/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify({ build: SWC_HOST.update.build, at: SWC_HOST.update.at }))) : f(u, o); return 1; })()`);
 await ev(`SWC_HOST.checkUpdate()`);
 console.log('update check, same build:', await ev(`JSON.stringify(SWC_HOST.update)`), '| banner:', await ev(`!${F}.document.getElementById('newBuild').hidden`));
+// An action from the panel itself (its state comes back with the action) must not show the banner either.
+await ev(`${F}.run('setTonightColor', '#ffff00', 'A').then(() => 1, e => 'FAIL ' + e.message)`); await sleep(1000);
+console.log('after an action in the panel, banner:', await ev(`!${F}.document.getElementById('newBuild').hidden`), '| version line:',
+  JSON.stringify(await ev(`(${F}.document.getElementById('setVersion') || {}).textContent`)));
 await ev(`(() => { const f = window.__realFetch; window.fetch = (u, o) => /version\.json/.test(String(u)) ? Promise.resolve(new Response('{"build":"zzz","at":"2026-12-01 20:00:00"}')) : f(u, o); return 1; })()`);
 await ev(`SWC_HOST.checkUpdate()`);
 await ev(`${F}.refresh(true)`); await sleep(2500);
