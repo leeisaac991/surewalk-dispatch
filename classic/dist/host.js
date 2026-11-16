@@ -68,7 +68,7 @@
     [1, /^(form submitted|timestamp|completion time)/], [2, /^dispatch/], [3, /^call time/], [4, /^arrival/], [5, /^wait/],
     [6, /\beid\b/], [7, /^last name/], [8, /^first name/], [9, /^phone/], [10, /^pick ?-?up/], [11, /^drop ?-?off/],
     [12, /disabilit|^ada\b/], [13, /^location$/], [14, /^(van|vehicle)/], [15, /^driver$/], [16, /^navigator$/],
-    [22, /cancel/], [23, /^notes?$/], [24, /^text( status)?$/], // 24: the texting computer's status for the rider
+    [22, /cancel/], [23, /^notes?$/], [24, /^(confirmed|text( status)?)$/], // 24: "Confirmed" (the time the rider said YES to the texting computer's text)
   ];
   function layoutOf(header) {
     const h = header.map(x => String(x || '').toLowerCase().replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim());
@@ -485,13 +485,45 @@
   }
 
   /*
+   * The side panel in the SURE Walk add-in: one big Pop out button (the panel works best in its own, larger window).
+   * "Use it here instead" shows the panel in the side panel and is remembered until Pop out is pressed again.
+   * Script Lab can't pop out (Excel blocks it), so there the panel always shows in the side panel.
+   */
+  const canPop = () => !!(window.__SWC_HOSTED && window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync);
+  function home() { if (canPop() && !ls.get('inPane', false)) launcher(); else showInPane(); }
+  function launcher() {
+    document.body.style.margin = '0';
+    document.body.innerHTML = `<style>
+        .swl { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px; padding: 18px; box-sizing: border-box; background: #f2f2f7;
+          font: 14px "Segoe UI", system-ui, sans-serif; color: #1d1d1f; }
+        .swl button.big { flex: 1; min-height: 200px; border: 0; border-radius: 20px; background: #bf5700; color: #fff; cursor: pointer;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px;
+          font: 700 30px "Segoe UI", system-ui, sans-serif; box-shadow: 0 8px 24px rgba(191,87,0,.35); }
+        .swl button.big:hover { background: #a84c00; } .swl button.big:focus-visible { outline: 3px solid #1d1d1f; outline-offset: 3px; }
+        .swl .ic { font-size: 56px; line-height: 1; } .swl .sub { font: 400 15px "Segoe UI", system-ui, sans-serif; opacity: .92; }
+        .swl .row { display: flex; justify-content: space-between; gap: 10px; } .swl a { color: #bf5700; font-weight: 600; text-decoration: none; }
+        .swl a.dim { color: #6e6e73; font-weight: 400; }
+        @media (prefers-color-scheme: dark) { .swl { background: #1c1c1e; color: #f5f5f7; } .swl a { color: #ff9a4d; } .swl a.dim { color: #a1a1a6; } }
+      </style>
+      <div class="swl">
+        <button class="big" id="swcPop" title="Open SURE Walk Dispatch in its own window"><span class="ic" aria-hidden="true">⧉</span>Pop out<span class="sub">Open SURE Walk Dispatch in its own window</span></button>
+        <div id="swcNote" hidden style="background:#fff4e5;color:#5a3000;border:1px solid #f0c48a;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.4"></div>
+        <div class="row"><a href="#" id="swcHere">Use it here instead</a><a href="#" id="swcRestart" class="dim">↻ Restart</a></div>
+      </div>`;
+    document.getElementById('swcPop').onclick = popOut;
+    document.getElementById('swcHere').onclick = e => { e.preventDefault(); ls.set('inPane', true); showInPane(); };
+    document.getElementById('swcRestart').onclick = e => { e.preventDefault(); location.reload(); };
+    showUpdate();
+  }
+
+  /*
    * Newer version on the add-in's site? Excel keeps a side panel running for hours (and restores it when the
    * workbook reopens), so an open panel checks the site's version.json every 2 minutes: a fingerprint of
    * backend.js + Sidebar.html + host.js, written by build.sh with this same hash. Different from the files this
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-15 22:42:24'; // stamped by build.sh
+  const BUILT_AT = '2026-11-15 23:17:31'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
@@ -567,7 +599,7 @@
     else if (m.t === 'call') rpc(m.fn, m.args).then(r => dlgSend({ t: 'ret', id: m.id, ok: true, result: r }), e => dlgSend({ t: 'ret', id: m.id, ok: false, error: e.message || String(e) }));
     else if (m.t === 'reload') location.reload();
   }
-  function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } setDialog(null); showInPane(); }
+  function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } setDialog(null); ls.set('inPane', true); showInPane(); }
   function popOut() {
     const ui = window.Office && Office.context && Office.context.ui;
     if (!window.__SWC_HOSTED || !ui || !ui.displayDialogAsync) {
@@ -581,8 +613,9 @@
         return;
       }
       setDialog(res.value);
+      ls.set('inPane', false); // from now on the side panel offers the big Pop out button again
       dlg.addEventHandler(Office.EventType.DialogMessageReceived, onDialogMessage);
-      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { setDialog(null); showInPane(); }); // closed with its ✕
+      dlg.addEventHandler(Office.EventType.DialogEventReceived, () => { setDialog(null); home(); }); // closed with its ✕
       poppedOut(bringBack);
     });
   }
@@ -603,7 +636,7 @@
       await readSheet(); // checks the tab and its columns before showing the panel
       if (!worker && !direct) startBackend();
       if (dlg) return; // already showing in its own window
-      showInPane();
+      home();
     } catch (e) {
       problem(e && e.code === 'ItemNotFound' ? `There's no tab named "${conf.sheet || ridesTab}".` : (e.message || String(e)));
     }

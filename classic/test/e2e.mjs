@@ -29,6 +29,9 @@ const ok = r => (typeof r === 'string' ? r : 'ok');
 const post = (path, b) => fetch(BASE + path, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
 
 await sleep(9000);
+// the add-in's side panel starts as one big Pop out button; "Use it here instead" shows the panel in it
+console.log('side panel: big Pop out button:', await ev(`!!document.querySelector('#swcPop.big') && !document.getElementById('swcFrame')`));
+await ev(`document.getElementById('swcHere').click(), 1`); await sleep(6000);
 const [RA, RC, RS, RT] = (process.env.ROWS || '226,225,223,224').split(',').map(Number); // assign, cancel/edit, GroupMe sync, a touched row
 await colsOf();
 console.log('panel up:', await ev(`!!${F}.document.querySelector('#newBuild') && !${F}.document.body.innerText.includes("Can't find")`), '| pop-out button:', await ev(`!!document.getElementById('swcPop')`));
@@ -126,7 +129,9 @@ if (popT) {
   console.log('after 40 s of silence, window says lost:', await pev(`document.body.innerText.includes('lost its connection')`));
   await pev('window.close(), 1');
   await sleep(2000);
-  console.log('after closing the window, back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));
+  console.log('after closing the window, the big Pop out button again:', await ev(`!!document.querySelector('#swcPop.big')`));
+  await ev(`document.getElementById('swcHere').click(), 1`); await sleep(6000);
+  console.log('Use it here -> back in the side panel:', await ev(`!!document.getElementById('swcFrame')`));
 }
 
 // Test phantom ride removal: assign a ride, then delete its row from the sheet to make it a phantom ride
