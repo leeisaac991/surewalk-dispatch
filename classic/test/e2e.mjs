@@ -149,5 +149,16 @@ const phantomAfter = st.active.find(r => r.id === refLost.id);
 const bannerAfter = await ev(`${F}.document.body.innerText.includes("phantom ride")`);
 console.log('after dismiss: ride present:', !!phantomAfter, '| banner present:', bannerAfter);
 
+console.log('settings version line:', JSON.stringify(await ev(`(${F}.document.getElementById('setVersion') || {}).textContent`)));
+// Updates: the site's version.json matches what this panel loaded (no banner); a newer one shows Update + the banner.
+// (the fake Excel adds a test clock to backend.js, so version.json is faked with this panel's own fingerprint first)
+await ev(`(() => { const f = window.fetch; window.__realFetch = f; window.fetch = (u, o) => /version\.json/.test(String(u)) ? Promise.resolve(new Response(JSON.stringify({ build: SWC_HOST.update.build, at: SWC_HOST.update.at }))) : f(u, o); return 1; })()`);
+await ev(`SWC_HOST.checkUpdate()`);
+console.log('update check, same build:', await ev(`JSON.stringify(SWC_HOST.update)`), '| banner:', await ev(`!${F}.document.getElementById('newBuild').hidden`));
+await ev(`(() => { const f = window.__realFetch; window.fetch = (u, o) => /version\.json/.test(String(u)) ? Promise.resolve(new Response('{"build":"zzz","at":"2026-12-01 20:00:00"}')) : f(u, o); return 1; })()`);
+await ev(`SWC_HOST.checkUpdate()`);
+await ev(`${F}.refresh(true)`); await sleep(2500);
+console.log('newer build on the site -> restart button:', JSON.stringify(await ev(`document.getElementById('swcRestart').textContent`)),
+  '| panel banner:', await ev(`!${F}.document.getElementById('newBuild').hidden`));
 console.log(logs.join('\n') || 'no page errors');
 process.exit(0);
