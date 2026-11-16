@@ -16,7 +16,7 @@
    * dialog messages. Long messages travel in pieces.
    */
   const CHUNK = 24000, pending = {}, parts = {};
-  let seq = 0, alive = true;
+  let seq = 0, alive = true, beatAt = 0; // beatAt: the side panel's last "still here" (0 = an older side panel that never sends one)
   function gone(why) {
     alive = false;
     document.body.innerHTML = '<div style="padding:24px;max-width:520px"><h3>SURE Walk Dispatch</h3><p>' + why + '</p>' +
@@ -48,15 +48,20 @@
     },
     reload() { send({ t: 'reload' }); },
   };
-  setInterval(() => { // the side panel was closed or reloaded: calls never come back
-    const old = Object.values(pending).find(p => Date.now() - p.at > 60000);
-    if (old) gone('This window lost its connection to the Excel side panel (it was closed or reloaded).');
+  // The side panel was closed or reloaded: it stops saying it's still here. A slow call is not a lost connection
+  // (calls wait their turn there, and Excel on the web can be slow), so only the silence counts.
+  setInterval(() => {
+    if (!alive) return;
+    const lost = beatAt ? Date.now() - beatAt > 30000 : Object.values(pending).some(p => Date.now() - p.at > 60000);
+    if (lost) gone('This window lost its connection to the Excel side panel (it was closed or reloaded).');
   }, 5000);
 
   Office.onReady(() => {
     Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, arg => {
       const m = receive(arg.message);
       if (!m) return;
+      if (beatAt || m.t === 'hb') beatAt = Date.now();
+      if (m.t === 'hb') return;
       if (m.t === 'page') { // the panel page, sent by the side panel
         document.body.innerHTML = '<iframe id="swcFrame" title="SURE Walk Dispatch"></iframe>';
         document.getElementById('swcFrame').srcdoc = m.html;

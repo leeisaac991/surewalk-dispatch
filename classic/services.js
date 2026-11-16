@@ -76,6 +76,7 @@ const UrlFetchApp = {
     opts = opts || {};
     const x = new XMLHttpRequest();
     x.open(String(opts.method || 'get').toUpperCase(), url, false); // synchronous, like UrlFetchApp
+    try { x.timeout = 20000; } catch (e) { /* allowed in the worker only; on the page a sync request can't time out */ }
     const h = opts.headers || {};
     Object.keys(h).forEach(k => x.setRequestHeader(k, h[k]));
     if (opts.payload != null && opts.contentType) x.setRequestHeader('Content-Type', opts.contentType);

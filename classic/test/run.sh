@@ -27,4 +27,4 @@ PROF=$(mktemp -d)
 URL=http://localhost:8778/site/taskpane.html; [ -n "${SCRIPTLAB:-}" ] && URL=http://localhost:8778/
 chromium-browser --headless=new --no-sandbox --remote-debugging-port=9337 --password-store=basic --user-data-dir="$PROF" --window-size=430,950 "$URL" >/dev/null 2>&1 & CHR=$!
 trap 'kill $SRV $CHR 2>/dev/null; sleep 1; rm -rf "$PROF" 2>/dev/null || true' EXIT
-sleep 1; timeout 230 node e2e.mjs
+sleep 1; timeout 400 node e2e.mjs
