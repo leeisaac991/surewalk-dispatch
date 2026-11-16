@@ -1323,11 +1323,8 @@
     const minsSince = hm => { const m = /(\d{1,2}):(\d{2})\s*([AP]M)?/i.exec(String(hm || '')); if (!m) return null;
       let h = +m[1]; if (m[3]) h = (h % 12) + (/pm/i.test(m[3]) ? 12 : 0);
       const d = new Date(), diff = (d.getHours() * 60 + d.getMinutes() - (h * 60 + +m[2]) + 1440) % 1440; return diff < 720 ? diff : null; };
-    const c = String(r.txs || '').trim();
-    if (c) {
-      const t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(c);
-      return `<span class="tag tx-ok" title="Confirmed by text${t ? ' at ' + esc(t[0]) : ''}">✓ Confirmed${t ? ' ' + esc(t[1]) : ''}</span>`;
-    }
+    const c = String(r.txs || '').trim(), t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(c);
+    if (t) return `<span class="tag tx-ok" title="Confirmed by text at ${esc(t[0])}">✓ Confirmed ${esc(t[1])}</span>`;
     if (r.driver || r.picked || !r.call || r.disp) return '';
     const m = minsSince(r.call);
     if (m == null) return '';
@@ -1374,6 +1371,16 @@
     $('pending').innerHTML = currentPlan.map(g => {
       if (g.rides.length < 2) return `<div class="pgroup single" data-gkey="${esc(g.key)}" ondragover="dragOver(event)" ondragleave="dragLeave(event)"
           ondrop="dropRider(event, ${js(g.key)})">${g.rides.map(r => pendingRow(r, counts, fresh)).join('')}</div>`;
+      if (g.together) {
+        const ids = g.rides.map(r => r.id), on = ids.length === selected.size && ids.every(i => selected.has(i));
+        const diff = k => new Set(g.rides.map(r => String(r[k] || '').toLowerCase().trim())).size > 1;
+        return `<div class="pgroup multi together" data-gkey="${esc(g.key)}" style="--gc:${TOGETHER_COLORS[g.together]}">
+          <div class="pgroup-h"><span class="gnum">👥 Traveling together</span>
+            <span class="glabel">${g.rides.length} riders · said on the call${diff('pickup') ? ' · different pick-ups' : ''}${diff('dropoff') ? ' · different drop-offs' : ''}</span>
+            <button class="${on ? 'on' : ''}" onclick="selectGroup(${js(ids)})">${on ? '✓ Selected' : `Select ${g.rides.length}`}</button></div>
+          ${g.rides.map(r => pendingRow(r, counts, fresh)).join('')}
+        </div>`;
+      }
       g.num = ++n;
       const ids = g.rides.map(r => r.id), on = ids.length === selected.size && ids.every(i => selected.has(i));
       const max = roomiest(), over = g.rides.length > max;
@@ -1701,13 +1708,21 @@
   let manualGroups = [], manualSeq = 0;
   try { manualGroups = JSON.parse(localStorage.getItem('dispatchGroups') || '[]'); manualSeq = manualGroups.length; } catch (e) { manualGroups = []; }
   const saveManual = () => { try { localStorage.setItem('dispatchGroups', JSON.stringify(manualGroups)); } catch (e) {   } };
+
+  const togetherOf = r => (/\bGroup ([A-H])\b/.exec(String(r.txs || '')) || [])[1] || '';
+  const TOGETHER_COLORS = { A: '#ff9500', B: '#af52de', C: '#34a853', D: '#007aff', E: '#e8467c', F: '#00a3a3', G: '#8d6e63', H: '#5c6bc0' };
   function planGroups() {
-    const byId = Object.fromEntries(state.pending.filter(r => !isStaged(r.id)).map(r => [r.id, r]));
+    const byLetter = {};
+    state.pending.filter(r => !isStaged(r.id) && togetherOf(r)).forEach(r => { (byLetter[togetherOf(r)] = byLetter[togetherOf(r)] || []).push(r); });
+    const together = Object.keys(byLetter).filter(L => byLetter[L].length > 1).sort()
+      .map(L => ({ key: 'g:' + L, rides: byLetter[L], together: L, manual: false }));
+    const tIds = new Set(together.flatMap(g => g.rides.map(r => r.id)));
+    const byId = Object.fromEntries(state.pending.filter(r => !isStaged(r.id) && !tIds.has(r.id)).map(r => [r.id, r]));
     manualGroups = manualGroups.map(g => ({ id: g.id, ids: g.ids.filter(i => byId[i]) })).filter(g => g.ids.length);
     const pinned = new Set(manualGroups.flatMap(g => g.ids));
     const max = Math.max(2, roomiest());
 
-    const loose = state.pending.filter(r => !pinned.has(r.id) && !isStaged(r.id));
+    const loose = state.pending.filter(r => !pinned.has(r.id) && !isStaged(r.id) && !tIds.has(r.id));
 
     const plain = loose.filter(r => !r.ada), adaAlone = loose.filter(r => r.ada).map(r => [r]);
     const auto = (prefs.autoPlan === false ? plain.map(r => [r]) : planRides(plain, max)).concat(adaAlone);
@@ -1721,14 +1736,15 @@
       }
     });
     if (joined) saveManual();
-    const groups = manualGroups.map(g => ({ key: g.id, rides: g.ids.map(i => byId[i]), manual: true }))
+    const groups = together.concat(manualGroups.map(g => ({ key: g.id, rides: g.ids.map(i => byId[i]), manual: true })))
       .concat(auto.map(g => ({ key: 'a:' + g.map(r => r.id).sort().join(','), rides: g, manual: false })));
     groups.forEach(g => {
       g.rides.sort((a, b) => a.tsMs - b.tsMs);
       g.tier = g.rides.length > 1 ? groupTier(g.rides) : 0;
       if (g.rides.length > 1 && g.rides.every(r => r.pPos && r.dPos)) g.rides = dropRoute(g.rides).order;
     });
-    return groups.sort(pendingOrder());
+    const sorted = groups.sort(pendingOrder());
+    return sorted.filter(g => g.together).concat(sorted.filter(g => !g.together));
   }
 
   function moveRider(id, key) {
