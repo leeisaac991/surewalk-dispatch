@@ -801,7 +801,9 @@ function forgetGroupMeToken() {
 }
 
 function listMyGroups() {
-  return gmFetch_('/groups', { per_page: 100, omit: 'memberships' }).map(g => ({ id: g.id, name: g.name }));
+
+  return gmFetch_('/groups', { per_page: 100, omit: 'memberships' }).map(g => ({ id: g.id, name: g.name, members: g.members_count || 0,
+    active: Number((g.messages && g.messages.last_message_created_at) || g.updated_at || 0) }));
 }
 
 function setGroupMeGroup(id, name) {
@@ -3437,6 +3439,10 @@ function undoAction(t) {
   if (t.toggleShift) toggleShift(t.toggleShift);
   (t.reposts || []).forEach(m => { try { postToGroup_(m.text, m.mentions); } catch (e) { out.notes.push("Couldn't re-post your earlier message: " + e.message); } });
   return out;
+}
+
+function getPanelUrl() {
+  try { return typeof ScriptApp !== 'undefined' && ScriptApp.getService ? String(ScriptApp.getService().getUrl() || '') : ''; } catch (e) { return ''; }
 }
 
 ;

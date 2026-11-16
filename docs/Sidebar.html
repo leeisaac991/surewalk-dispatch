@@ -121,6 +121,93 @@
   .set-gm { padding: 12px 14px; }
   .set-gm .field { margin-bottom: 8px; }
   
+  .ico { display: inline-flex; width: 18px; height: 18px; flex: none; }
+  .ico svg { width: 100%; height: 100%; }
+  .set-card { width: min(820px, 100%); height: min(600px, 88vh); }
+  .set-h { gap: 8px; }
+  .set-h b { flex: 1; text-align: left; margin-left: 0; display: inline-flex; align-items: center; gap: 8px; }
+  .set-main { flex: 1; min-height: 0; display: flex; }
+  .set-nav { width: 210px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; background: var(--bg); border-right: .5px solid var(--sep); }
+  .set-nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; border-radius: 8px;
+    background: none; color: var(--text); font-size: 14px; font-weight: 500; min-height: 40px; }
+  .set-nav button:hover { background: var(--fill); }
+  .set-nav button.on { background: var(--accent-bg); color: var(--accent); }
+  .set-nav .set-ver { margin-top: auto; padding: 8px 10px 2px; text-align: left; }
+  .set-body { flex: 1; min-width: 0; background: var(--card2); padding: 6px 18px 22px; }
+  .set-pane[hidden] { display: none; }
+  .set-pane h3 { font-size: 17px; margin: 14px 2px 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .set-pane .set-sec { margin-left: 2px; }
+  .set-pane .set-note { margin-left: 2px; }
+  .set-tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--fill); color: var(--label2); }
+  .set-row .ico { color: var(--muted); }
+  .set-row .row-l { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .palrow .pallabel small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+  .gm-status { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+  .gm-status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .gm-status.ok .dot { background: var(--green); } .gm-status.bad .dot { background: var(--orange); }
+  .gm-status .gm-st-t { flex: 1; min-width: 0; } .gm-status .gm-st-t b { display: block; }
+  .gm-status .gm-st-t span { font-size: 12.5px; color: var(--muted); }
+  .set-divider { height: .5px; background: var(--sep); margin: 14px 0; }
+  .gm-help { font-size: 12.5px; color: var(--muted); margin: 2px 2px 10px; }
+  .set-lab { font-size: 13px; font-weight: 600; margin: 0 2px 6px; display: block; }
+  @media (max-width: 640px) {
+    .set-card { height: auto; max-height: 92vh; }
+    .set-main { flex-direction: column; }
+    .set-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: .5px solid var(--sep); padding: 6px 8px; }
+    .set-nav button { width: auto; flex: none; white-space: nowrap; }
+    .set-nav .set-ver { display: none; }
+    .set-body { overflow-y: auto; }
+  }
+  
+  .pill.gm-nc { background: none; border: 1.5px solid var(--accent); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .pill.locked { opacity: .5; cursor: not-allowed; display: inline-flex; align-items: center; gap: 6px; }
+  body.gm-setup #shiftNote, body.gm-setup #alerts, body.gm-setup .crewsec, body.gm-setup .cols { opacity: .45; transition: opacity .3s ease; }
+  .gsetup { display: grid; grid-template-columns: 320px minmax(0, 1fr); background: var(--card); border-radius: 14px; overflow: hidden; margin: 0 0 14px; box-shadow: var(--shadow); }
+  .gsetup.in-set { grid-template-columns: 1fr; margin: 4px 0 0; }
+  .gs-left { background: var(--bg); padding: 18px; border-right: .5px solid var(--sep); }
+  .gsetup.in-set .gs-left { border-right: 0; border-bottom: .5px solid var(--sep); }
+  .gs-tag { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); }
+  .gs-title { font-size: 18px; font-weight: 700; margin: 10px 0 6px; line-height: 1.25; }
+  .gs-intro { font-size: 13px; color: var(--label2); margin: 0 0 14px; }
+  .gs-rail { display: grid; gap: 4px; }
+  .gs-step { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; background: none; color: var(--text); }
+  .gs-step:disabled { opacity: .5; cursor: default; }
+  .gs-step.on { background: var(--accent-bg); }
+  .gs-num { width: 26px; height: 26px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+    border: 1.5px solid var(--sep); color: var(--muted); }
+  .gs-step.on .gs-num { border-color: var(--accent); color: var(--accent); }
+  .gs-step.done .gs-num { background: var(--green); border-color: var(--green); color: #fff; }
+  .gs-num .ico { width: 15px; height: 15px; }
+  .gs-step b { display: block; font-size: 14px; } .gs-step span.s { display: block; font-size: 12px; color: var(--muted); }
+  .gs-right { padding: 18px 20px; min-width: 0; }
+  .gs-box { border: .5px solid var(--sep); border-radius: 12px; padding: 14px; background: var(--card2); margin-bottom: 14px; }
+  .gs-box-h, .gs-h4 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
+  .gs-bm { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1.5px dashed var(--accent); border-radius: 10px; color: var(--accent);
+    font-weight: 600; text-decoration: none; cursor: grab; background: var(--card); }
+  .gs-ol { margin: 10px 0 0; padding-left: 20px; font-size: 13px; display: grid; gap: 4px; }
+  .gs-small { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .gs-flash { font-size: 12.5px; color: var(--amber); min-height: 0; margin-top: 6px; }
+  .gs-console { margin-top: 10px; font-size: 13px; }
+  .gs-console summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+  .gs-console p { margin: 8px 0; color: var(--label2); }
+  .gs-code { display: flex; gap: 8px; align-items: center; background: var(--fill); border-radius: 8px; padding: 8px 10px; }
+  .gs-code code { flex: 1; font-size: 12.5px; overflow-x: auto; white-space: nowrap; }
+  .gs-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--label2); margin: 12px 0 14px; }
+  .gs-note .ico { width: 16px; height: 16px; margin-top: 1px; }
+  kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 0 5px; border: .5px solid var(--sep); border-radius: 5px; background: var(--card); }
+  .gs-tok { flex: 1; min-width: 0; height: 46px; font-size: 15px; }
+  .gs-err { color: var(--red); font-size: 13px; margin: 8px 0 0; }
+  .gs-grps { display: grid; gap: 6px; margin: 10px 0; }
+  .gs-grp { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 11px 12px; border-radius: 10px; background: var(--card2);
+    border: 1px solid var(--sep); color: var(--text); min-height: 48px; }
+  .gs-grp:hover { border-color: var(--accent); }
+  .gs-grp .ico { color: var(--muted); }
+  .gs-grp .gs-gt { flex: 1; min-width: 0; } .gs-grp .gs-gt b { display: block; } .gs-grp .gs-gt span { font-size: 12px; color: var(--muted); }
+  .gs-sugg { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); }
+  .gm-strip { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin: 0 0 12px; border-radius: 12px; background: var(--green-bg); color: var(--green-text); font-size: 13.5px; }
+  .gm-strip .t { flex: 1; } .gm-strip button { background: none; color: inherit; font-weight: 600; }
+  @media (max-width: 700px) { .gsetup { grid-template-columns: 1fr; } .gs-left { border-right: 0; border-bottom: .5px solid var(--sep); } }
+  
   .alert.shift-alert { background: var(--amber-bg); }
   .offtag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); }
   .badge.offwarn { background: var(--amber-bg); color: var(--amber); }
@@ -588,6 +675,7 @@
   <div class="top">
     <span class="brand"><span id="brandLogo" class="brand-logo"></span></span>
     <button id="colorBtn" class="pill" onclick="openSettings('colors')" hidden><span id="colorSwatch" class="swatch"></span><span id="colorSwatchB" class="swatch" style="margin-left:-4px"></span><span id="colorLabel"></span></button>
+    <button id="gmNotConn" class="pill gm-nc" onclick="showGmSetup()" hidden><span class="ico" data-ico="warning"></span>GroupMe not connected</button>
     <button id="syncBtn" class="pill" onclick="syncClick()"></button>
     <button id="apBtn" class="pill" onclick="toggleAutopilot()" hidden></button>
     <button id="waitBtn" class="pill" onclick="togglePanel('waitPanel')" title="Average wait (Arrival − Call) of the last 5 rides"></button>
@@ -605,59 +693,88 @@
   <div id="undoToast" class="undo-toast" hidden><span id="undoText"></span><button onclick="undoLast()">Undo</button></div>
   <div id="settingsSheet" class="ask-bg set-bg" hidden onclick="if (event.target === this) closeSettings()">
    <div class="set-card" role="dialog" aria-label="Settings">
-    <div class="set-h"><b>Settings</b><button class="closex" onclick="closeSettings()" title="Close" aria-label="Close settings">✕</button></div>
+    <div class="set-h"><b><span class="ico" data-ico="gear"></span>Settings</b><button class="closex" onclick="closeSettings()" title="Close" aria-label="Close settings">✕</button></div>
+    <div class="set-main">
+    <nav class="set-nav" aria-label="Settings categories">
+     <button data-cat="you" onclick="setCat('you')"><span class="ico" data-ico="user"></span>You</button>
+     <button data-cat="colors" onclick="setCat('colors')"><span class="ico" data-ico="palette"></span>Tonight's colors</button>
+     <button data-cat="appearance" onclick="setCat('appearance')"><span class="ico" data-ico="moon"></span>Appearance</button>
+     <button data-cat="alerts" onclick="setCat('alerts')"><span class="ico" data-ico="bell"></span>Alerts</button>
+     <button data-cat="groupme" onclick="setCat('groupme')"><span class="ico" data-ico="chat"></span>GroupMe</button>
+     <div class="set-ver" id="setVersion">Version: —</div>
+    </nav>
     <div class="set-body">
-     <div class="set-sec">You</div>
-     <div class="set-group">
-      <div class="set-row"><span>Your name</span>
-        <input type="text" id="dispatcher" placeholder="I. Lee" style="max-width:220px" onchange="saveDispatcher(this.value)"></div>
-     </div>
-     <div class="set-note">Filled into the sheet's Dispatch column when you assign rides.</div>
-     <div class="set-sec" id="colorSection">Picked colors tonight</div>
-     <div class="set-group set-gm set-colors">
-      <div class="palrow" style="margin-top:0"><span class="pallabel">A · regular</span><span id="palette"></span></div>
-      <div class="palrow"><span class="pallabel">B · pastel</span><span id="paletteB"></span></div>
-     </div>
-     <div class="set-note">Rows turn this color when picked: A shift uses the regular shade, B shift the pastel. Tapping a regular color also sets its pastel. <span id="colorNote"></span></div>
-     <div class="set-sec">Appearance</div>
-     <div class="set-group">
-      <div class="set-row"><span>Theme</span><div class="seg" id="themeSeg"></div></div>
-     </div>
-     <div class="set-sec">Accent color</div>
-     <div class="set-group"><div class="accents" id="accentRow"></div></div>
-     <div class="set-sec">Mascot</div>
-     <div class="set-group"><div class="mascots" id="mascotRow"></div></div>
-     <div class="set-note">Shown when nothing is in progress.</div>
-     <div class="set-sec">Alerts when a crew says empty</div>
-     <div class="set-group">
-      <div class="set-row" onclick="toggleAlert('sound')"><span>🔔 Sound</span><span class="sw" id="alSound"></span></div>
-      <div class="set-row" onclick="toggleAlert('desktop')"><span>💻 Desktop notification</span><span class="sw" id="alDesktop"></span></div>
-     </div>
-     <div class="set-note" id="alNote">An on-screen alert always shows too.</div>
-     <div class="set-sec" id="gmSection">GroupMe</div>
-     <div class="set-group" style="padding:0;margin-bottom:10px">
-      <div class="set-row" onclick="setPref('autoSend', prefs.autoSend === false)"><span>📤 Send ride messages automatically<br><span class="muted" style="font-size:12px">Assign, take off, move and cancel post to GroupMe right away (↶ undo deletes the post). Off = review in Chat, then press Send.</span></span><span class="sw" id="autoSendSw"></span></div>
-     </div>
-     <div class="set-group set-gm">
-    <div class="muted">Token: <b id="gmTokenState"></b></div>
-    <div class="field">
-      <input type="password" id="gmToken" placeholder="Paste X-Access-Token" autocomplete="off">
-      <button onclick="saveToken()">Save</button>
+     <section class="set-pane" data-cat="you">
+      <h3>You</h3>
+      <div class="set-group">
+       <div class="set-row"><span>Your name</span>
+         <input type="text" id="dispatcher" placeholder="I. Lee" style="max-width:220px" onchange="saveDispatcher(this.value)"></div>
+      </div>
+      <div class="set-note">Filled into the sheet's Dispatch column when you assign rides.</div>
+     </section>
+     <section class="set-pane" data-cat="colors" id="colorSection" hidden>
+      <h3>Picked colors tonight <span class="set-tag" id="colorNote"></span></h3>
+      <div class="set-group set-gm set-colors">
+       <div class="palrow" style="margin-top:0"><span class="pallabel">A shift<small>Regular</small></span><span id="palette"></span></div>
+       <div class="palrow"><span class="pallabel">B shift<small>Pastel</small></span><span id="paletteB"></span></div>
+      </div>
+      <div class="set-note">Rows turn this color when picked: A shift uses the regular shade, B shift the pastel. Tapping a regular color also sets its pastel.</div>
+     </section>
+     <section class="set-pane" data-cat="appearance" hidden>
+      <h3>Appearance</h3>
+      <div class="set-group">
+       <div class="set-row"><span>Theme</span><div class="seg" id="themeSeg"></div></div>
+      </div>
+      <div class="set-sec">Accent color</div>
+      <div class="set-group"><div class="accents" id="accentRow"></div></div>
+      <div class="set-sec">Mascot</div>
+      <div class="set-group"><div class="mascots" id="mascotRow"></div></div>
+      <div class="set-note">Shown when nothing is in progress.</div>
+     </section>
+     <section class="set-pane" data-cat="alerts" hidden>
+      <h3>Alerts</h3>
+      <div class="set-sec">When a crew says empty</div>
+      <div class="set-group">
+       <div class="set-row" onclick="toggleAlert('sound')"><span class="row-l"><span class="ico" data-ico="speaker"></span>Sound</span><span class="sw" id="alSound"></span></div>
+       <div class="set-row" onclick="toggleAlert('desktop')"><span class="row-l"><span class="ico" data-ico="monitor"></span>Desktop notification</span><span class="sw" id="alDesktop"></span></div>
+      </div>
+      <div class="set-note" id="alNote">An on-screen alert always shows too.</div>
+     </section>
+     <section class="set-pane" data-cat="groupme" id="gmSection" hidden>
+      <h3>GroupMe</h3>
+      <div class="set-group gm-status" id="gmStatusCard"><span class="dot"></span>
+       <span class="gm-st-t"><b id="gmConnTitle">Not connected</b><span>Dispatch chat: <span id="gmGroupState"></span> · token <span id="gmTokenState"></span></span></span>
+       <button class="link danger" id="gmForgetBtn" onclick="forgetToken()">Forget token</button>
+      </div>
+      <div class="set-group" style="padding:0;margin-top:10px">
+       <div class="set-row" onclick="setPref('autoSend', prefs.autoSend === false)"><span class="row-l"><span class="ico" data-ico="send"></span><span>Send ride messages automatically<br><span class="muted" style="font-size:12px">Assign, take off, move and cancel post to GroupMe right away (↶ undo deletes the post). Off = review in Chat, then press Send.</span></span></span><span class="sw" id="autoSendSw"></span></div>
+      </div>
+      <div id="gmFields">
+       <div class="set-divider"></div>
+       <label class="set-lab" for="gmToken">Access token</label>
+       <div class="field">
+         <input type="password" id="gmToken" placeholder="Paste X-Access-Token" autocomplete="off" onkeydown="if (event.key === 'Enter') saveToken()">
+         <button onclick="saveToken()">Save</button>
+       </div>
+       <button class="link" style="font-size:12.5px" onclick="$('gmHelp').hidden = !$('gmHelp').hidden">Where do I find it?</button>
+       <div class="gm-help" id="gmHelp" hidden>web.groupme.com → Ctrl ⇧ I → Network → click any chat → a request to api.groupme.com → Request Headers → X-Access-Token.
+         <button class="link" onclick="closeSettings(); showGmSetup(1)">Open the step-by-step setup</button></div>
+       <label class="set-lab" for="gmGroups" style="margin-top:12px">Dispatch chat</label>
+       <div class="field">
+         <select id="gmGroups"><option value="">— load your groups —</option></select>
+         <button onclick="loadGroups()">Load</button>
+         <button onclick="saveGroup()">Use</button>
+       </div>
+      </div>
+      <div id="gmSetupInSettings"></div>
+     </section>
     </div>
-    <div class="muted" style="margin:-4px 0 8px">web.groupme.com → F12 → Network → any api.groupme.com request → X-Access-Token</div>
-    <div class="muted">Dispatch chat: <b id="gmGroupState"></b></div>
-    <div class="field">
-      <select id="gmGroups"><option value="">— load your groups —</option></select>
-      <button onclick="loadGroups()">Load</button>
-      <button onclick="saveGroup()">Use</button>
     </div>
-    <button class="link danger" onclick="forgetToken()">Forget token</button>
-     </div>
-    </div>
-    <div class="set-ver" id="setVersion">Version: —</div>
    </div>
   </div>
 
+  <div id="gmSetup" hidden></div>
+  <div id="gmStrip" class="gm-strip" hidden></div>
   <div id="status"></div>
   <div id="shiftNote"></div>
   <div id="alerts"></div>
@@ -1079,7 +1196,7 @@
     $('colorLabel').textContent = col.A ? 'Picked colors' : 'Set picked color';
     $('colorBtn').className = 'pill warn';
     $('colorBtn').hidden = !!col.A;
-    $('colorNote').textContent = (col.chosenA || col.chosenB) ? '(chosen)' : (col.detectedA || col.detectedB) ? '(detected from sheet)' : '(not set)';
+    $('colorNote').textContent = (col.chosenA || col.chosenB) ? 'Chosen' : (col.detectedA || col.detectedB) ? 'Detected from sheet' : 'Not set';
     const sw = (h, on, which) => `<span class="swatch ${on ? 'on' : ''}" style="background:${h}" title="${h}" onclick="setColor('${h}', '${which}')"></span>`;
     $('palette').innerHTML = PALETTE.map(h => sw(h, h === col.A, 'A')).join('') +
       ` <label class="custom" title="Pick any other color">Other…<input type="color" value="${col.A || '#ff9900'}" onchange="setColor(this.value, 'A')"></label>` +
@@ -1104,12 +1221,15 @@
       : '<div class="muted">No arrivals recorded tonight yet.</div>';
 
     const g = state.groupme;
-    $('syncBtn').className = 'pill' + (!g.enabled ? ' warn' : g.running ? ' on' : '');
-    $('syncBtn').innerHTML = !g.enabled ? 'Set up GroupMe' : `<span class="sw ${g.running ? 'on' : ''}"></span>GroupMe sync`;
+
+    $('syncBtn').className = 'pill' + (!g.enabled ? ' locked' : g.running ? ' on' : '');
+    $('syncBtn').innerHTML = !g.enabled ? `<span class="ico">${ICONS.lock}</span>GroupMe sync` : `<span class="sw ${g.running ? 'on' : ''}"></span>GroupMe sync`;
+    $('syncBtn').title = !g.enabled ? 'Connect GroupMe first' : $('syncBtn').title;
+    $('syncBtn').setAttribute('aria-disabled', String(!g.enabled));
     renderAutopilotSettings();
     $('gmTokenState').textContent = g.tokenHint ? `saved (…${g.tokenHint})` : 'not set';
     $('gmGroupState').textContent = g.groupName || 'not chosen';
-    if (!g.enabled && !settingsTouched) { settingsTouched = true; openSettings('groupme'); }
+    renderGmSetup();
 
     const inbox = state.chat.inbox.filter(i => !answering.has(i)).map(i => state.chat.byId[i]).filter(Boolean);
     $('chatBadge').hidden = !inbox.length;
@@ -2070,10 +2190,13 @@
   }
   async function forgetToken() {
     if (!(await ask('Remove the saved GroupMe token? Sync stops until you paste a new one.', 'Forget token', true))) return;
+    stopLive();
     await run('forgetGroupMeToken');
+    Object.assign(gsu, { step: 1, groups: null, err: '', busy: false, changing: false, justConnected: false });
+    renderGmSetup(true);
   }
   function syncClick() {
-    if (!state.groupme.enabled) return openSettings('groupme');
+    if (!state.groupme.enabled) return;
     const on = !state.groupme.running;
     if (!on) stopLive();
     doAct('setSyncRunning', [on], s => { s.groupme.running = on; });
@@ -3068,11 +3191,244 @@ show();
     $('mascotRow').innerHTML = Object.entries(MASCOTS).map(([k, m]) =>
       `<button class="mascot-opt ${prefs.mascot === k ? 'on' : ''}" onclick="setPref('mascot', '${k}')">${m.svg}<span>${m.name}</span></button>`).join('');
   }
+
+  const SET_CATS = ['you', 'colors', 'appearance', 'alerts', 'groupme'];
+  let setCatNow = (() => { try { return sessionStorage.getItem('dispatchSetCat') || 'you'; } catch (e) { return 'you'; } })();
+  function setCat(cat) {
+    if (!SET_CATS.includes(cat)) cat = 'you';
+    setCatNow = cat;
+    try { sessionStorage.setItem('dispatchSetCat', cat); } catch (e) {   }
+    document.querySelectorAll('.set-nav button[data-cat]').forEach(b => { b.classList.toggle('on', b.dataset.cat === cat); b.setAttribute('aria-current', b.dataset.cat === cat ? 'page' : 'false'); });
+    document.querySelectorAll('.set-pane').forEach(x => { x.hidden = x.dataset.cat !== cat; });
+    document.querySelector('.set-body').scrollTop = 0;
+    if (cat === 'groupme') renderGmSetup(true);
+  }
   function openSettings(section) {
     renderSettings();
+    setCat(SET_CATS.includes(section) ? section : setCatNow);
     reveal($('settingsSheet'));
-    const to = { groupme: 'gmSection', colors: 'colorSection' }[section];
-    if (to) setTimeout(() => $(to).scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+  }
+
+  const ico = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICONS = {
+    user: ico('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>'),
+    palette: ico('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-1.4-1.2-1.6-1.2-2.8 0-.9.7-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>'),
+    moon: ico('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'),
+    bell: ico('<path d="M6 17v-6a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/>'),
+    chat: ico('<path d="M12 3C6.5 3 3 6.6 3 11c0 2.2 1 4.2 2.6 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.5 0 9-3.6 9-8.2S17.5 3 12 3z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/>'),
+    gear: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>'),
+    warning: ico('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>'),
+    lock: ico('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+    check: ico('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+    bookmark: ico('<path d="M6 3h12v18l-6-4-6 4z"/>'),
+    speaker: ico('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>'),
+    monitor: ico('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+    send: ico('<path d="M4 12 20 4l-6 16-3-7z"/>'),
+    checkCircle: ico('<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>'),
+  };
+  function paintIcons(root) { (root || document).querySelectorAll('.ico[data-ico]').forEach(el => { if (!el.firstChild && ICONS[el.dataset.ico]) el.innerHTML = ICONS[el.dataset.ico]; }); }
+  paintIcons();
+
+  const gsu = { step: 1, groups: null, groupsErr: '', err: '', busy: false, changing: false, justConnected: false, stripOff: false,
+    panelUrl: '', hashChecked: false, sig: {} };
+  const gmHasToken = () => !!(state && state.groupme && state.groupme.tokenHint);
+  const gmNeedsSetup = () => !!state && (!state.groupme.enabled || gsu.changing);
+
+  const BM_COPY = "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');navigator.clipboard.writeText(t).then(()=>alert('GroupMe token copied. Paste it in the SURE Walk panel.'),()=>prompt('Copy your GroupMe token:',t))})()";
+  const bmSend = url => "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');window.open(" + JSON.stringify(url).replace(/'/g, '%27') + "+'#gmtoken='+encodeURIComponent(t),'surewalk-panel')})()";
+  function gmStepsHtml(p) {
+    const g = state.groupme, has = gmHasToken(), connected = g.enabled && !gsu.changing;
+    const done = { 1: has || gsu.step > 1, 2: has, 3: connected };
+    const steps = [[1, 'Copy your token', 'From GroupMe on the web'],
+      [2, 'Paste it here', has ? `Token saved (…${esc(g.tokenHint)})` : 'Saved on this computer'],
+      [3, 'Choose the dispatch chat', connected ? esc(g.groupName) : 'Turns on GroupMe sync']];
+    return steps.map(([n, t, sub]) => `<button class="gs-step ${gsu.step === n ? 'on' : ''} ${done[n] && gsu.step !== n ? 'done' : ''}" ${n === 3 && !has ? 'disabled' : ''}
+        onclick="gsuGo(${n})" aria-current="${gsu.step === n ? 'step' : 'false'}"><span class="gs-num">${done[n] && gsu.step !== n ? `<span class="ico">${ICONS.check}</span>` : n}</span>
+        <span><b>${t}</b><span class="s">${sub}</span></span></button>`).join('');
+  }
+  function gmStepBody(p) {
+    if (gsu.step === 1) {
+      const send = !!gsu.panelUrl;
+      return `<div class="gs-box"><div class="gs-box-h">Quick way</div>
+          <a class="gs-bm" id="${p}-bm" draggable="true" onclick="bmClick(event, '${p}')"><span class="ico">${ICONS.bookmark}</span>Get GroupMe token</a>
+          <ol class="gs-ol"><li>Drag the button to your bookmarks bar (<kbd>Ctrl ⇧ B</kbd> shows the bar).</li>
+            <li>Open web.groupme.com, logged in, and click the bookmark.</li>
+            <li>${send ? 'The panel opens and connects. Pick the dispatch chat.' : 'The token is copied. Come back and paste it in step 2.'}</li></ol>
+          ${send ? `<div class="gs-small">Your token passes through the page address once and is removed right away. On a shared computer, use the
+            <a id="${p}-bm2" draggable="true" onclick="bmClick(event, '${p}')">copy-only bookmark</a> and paste it in step 2.</div>` : ''}
+          <div class="gs-flash" id="${p}-flash" role="status"></div>
+          <details class="gs-console"><summary>No bookmarks bar? Use the Console instead</summary>
+            <p>On web.groupme.com press <kbd>Ctrl ⇧ I</kbd> → Console, paste this and press Enter. Chrome may ask you to type "allow pasting" first.</p>
+            <div class="gs-code"><code>copy(localStorage.getItem('access_token'))</code><button onclick="copyConsole(this)">Copy</button></div></details></div>
+        <div class="gs-h4">Or step by step</div>
+        <ol class="gs-ol" style="margin-bottom:4px">
+          <li>Open GroupMe on the web and sign in. <a href="https://web.groupme.com" target="_blank" rel="noopener">Open web.groupme.com</a></li>
+          <li>Press <kbd>Ctrl ⇧ I</kbd> (Mac: <kbd>⌥ ⌘ I</kbd>), then click the <b>Network</b> tab.</li>
+          <li>Click any chat so requests appear. Pick one whose name starts with <code>api.groupme.com</code>. If the list is empty, refresh the page.</li>
+          <li>Under <b>Request Headers</b>, find <code>X-Access-Token</code> and copy its value.</li></ol>
+        <div class="gs-note"><span class="ico">${ICONS.lock}</span>The token works like a password for your GroupMe account. It's saved only on this computer. Don't paste it in a chat.</div>
+        <button class="primary" onclick="gsuGo(2)">I copied it →</button>`;
+    }
+    if (gsu.step === 2) {
+      return `<label class="set-lab" for="${p}-tok">X-Access-Token</label>
+        <div class="field" style="margin-bottom:0"><input type="password" id="${p}-tok" class="gs-tok" placeholder="Paste here (Ctrl+V)" autocomplete="off" spellcheck="false"
+          onkeydown="if (event.key === 'Enter') gsuSave('${p}')"><button class="primary" onclick="gsuSave('${p}')" ${gsu.busy ? 'disabled' : ''}>${gsu.busy ? 'Checking…' : 'Save'}</button></div>
+        ${gsu.err ? `<div class="gs-err" role="alert">${esc(gsu.err)}</div>` : ''}
+        <button class="link" style="margin-top:10px" onclick="gsuGo(1)">Can't find it? Back to the walkthrough</button>`;
+    }
+    const list = gsu.groups;
+    const best = list && list.length ? (list.find(x => /dispatch/i.test(x.name)) || list.slice().sort((a, b) => (b.active || 0) - (a.active || 0))[0]) : null;
+    const ago = sec => { if (!sec) return ''; const m = Math.max(0, Math.round((Date.now() / 1000 - sec) / 60)); return m < 60 ? `active ${m}m ago` : m < 2880 ? `active ${Math.round(m / 60)}h ago` : `active ${Math.round(m / 1440)}d ago`; };
+    return `<p style="margin:0 0 4px">Your groups are loaded. Pick the one crews post in. GroupMe sync turns on as soon as you choose.</p>
+      ${gsu.groupsErr ? `<div class="gs-err" role="alert">${esc(gsu.groupsErr)} <button class="link" onclick="gsuLoadGroups()">Try again</button></div>` : ''}
+      ${!list && !gsu.groupsErr ? '<div class="muted" style="margin:12px 0">Loading your groups…</div>' : ''}
+      ${list ? `<div class="gs-grps">${list.length ? list.map(x => `<button class="gs-grp" onclick='gsuPick(${JSON.stringify(String(x.id))})' ${gsu.busy ? 'disabled' : ''}>
+          <span class="ico">${ICONS.chat}</span><span class="gs-gt"><b>${esc(x.name)}</b><span>${[x.members ? x.members + ' members' : '', ago(x.active)].filter(Boolean).join(' · ')}</span></span>
+          ${best && x.id === best.id ? '<span class="gs-sugg">Suggested</span>' : ''}</button>`).join('') : '<div class="muted">No groups on this GroupMe account.</div>'}</div>` : ''}
+      ${gsu.changing && state.groupme.enabled ? `<button class="link" onclick="gsuCancelChange()">Keep the current chat (${esc(state.groupme.groupName)})</button>` : ''}`;
+  }
+  function gmSetupHtml(p) {
+    const chatOnly = gmHasToken();
+    return `<div class="gs-left"><span class="gs-tag">${chatOnly ? 'Almost done' : 'Setup needed'}</span>
+        <div class="gs-title">${chatOnly ? 'Choose the GroupMe dispatch chat' : 'Connect GroupMe to start dispatching'}</div>
+        <p class="gs-intro">${chatOnly ? 'Your GroupMe token is saved. Pick the chat crews post in and GroupMe sync turns on.'
+          : 'No GroupMe token was found on this computer. Ride posts, ❤️ acknowledgements and crew updates all need it. Takes about a minute.'}</p>
+        <div class="gs-rail">${gmStepsHtml(p)}</div></div>
+      <div class="gs-right">${gmStepBody(p)}</div>`;
+  }
+
+  function renderGmSetup(force) {
+    if (!state) return;
+    const need = gmNeedsSetup(), g = state.groupme;
+    document.body.classList.toggle('gm-setup', need);
+    $('gmNotConn').hidden = !!g.enabled;
+    const sig = JSON.stringify([need, gsu.step, gsu.groups, gsu.groupsErr, gsu.err, gsu.busy, gsu.changing, gsu.panelUrl, g.tokenHint, g.groupName, g.enabled]);
+    const draw = (box, p, extra) => {
+      if (!force && gsu.sig[p] === sig && box.firstChild) return;
+      gsu.sig[p] = sig;
+      const keep = document.activeElement && document.activeElement.id === p + '-tok';
+      box.className = 'gsetup' + (extra || '');
+      box.innerHTML = gmSetupHtml(p);
+      [p + '-bm', p + '-bm2'].forEach((id, i) => { const a = $(id); if (a) a.setAttribute('href', i === 0 && gsu.panelUrl ? bmSend(gsu.panelUrl) : BM_COPY); });
+      if (keep && $(p + '-tok')) $(p + '-tok').focus();
+    };
+    const card = $('gmSetup');
+    card.hidden = !need;
+    if (need) draw(card, 'pg'); else { card.innerHTML = ''; gsu.sig.pg = ''; }
+
+    const st = $('gmStatusCard');
+    st.className = 'set-group gm-status ' + (g.enabled ? 'ok' : 'bad');
+    $('gmConnTitle').textContent = g.enabled ? 'Connected' : has_() ? 'Choose the dispatch chat' : 'Not connected';
+    $('gmForgetBtn').hidden = !gmHasToken();
+    $('gmFields').hidden = !gmHasToken();
+    const inSet = $('gmSetupInSettings');
+    if (!gmHasToken() && !$('settingsSheet').hidden && setCatNow === 'groupme') draw(inSet, 'st', ' in-set');
+    else if (gmHasToken()) { inSet.innerHTML = ''; inSet.className = ''; gsu.sig.st = ''; }
+
+    const strip = $('gmStrip');
+    strip.hidden = !(g.enabled && !gsu.changing && gsu.justConnected && !gsu.stripOff);
+    if (!strip.hidden) strip.innerHTML = `<span class="ico">${ICONS.checkCircle}</span><span class="t">GroupMe sync is ${g.running ? 'on' : 'off'} · connected to <b>${esc(g.groupName)}</b></span>
+      <button onclick="gsuChangeChat()">Change chat</button><button onclick="gsu.stripOff = true; renderGmSetup()" aria-label="Dismiss">✕</button>`;
+    if (!gsu.hashChecked) { gsu.hashChecked = true; gmTokenFromAddress(); }
+    if (!gsu.urlAsked) { gsu.urlAsked = true; callQuiet('getPanelUrl').then(u => { if (u && /^https:\/\//.test(u)) { gsu.panelUrl = u; renderGmSetup(); } }).catch(() => {}); }
+    if (need && gsu.step === 3 && !gsu.groups && !gsu.loading) gsuLoadGroups();
+  }
+  const has_ = () => gmHasToken();
+  function showGmSetup(step) {
+    if (step) gsu.step = step;
+    renderGmSetup(true);
+    const c = $('gmSetup');
+    if (!c.hidden) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function gsuGo(n) {
+    if (n === 3 && !gmHasToken()) return;
+    gsu.step = n; gsu.err = '';
+    renderGmSetup(true);
+    const t = $('pg-tok') || $('st-tok'); if (n === 2 && t) t.focus();
+  }
+  function bmClick(e, p) {
+    e.preventDefault();
+    const f = $(p + '-flash'); if (!f) return;
+    f.textContent = 'Drag it to the bookmarks bar; clicking here does nothing.';
+    clearTimeout(f._t); f._t = setTimeout(() => { f.textContent = ''; }, 2500);
+  }
+  async function copyConsole(btn) {
+    const text = "copy(localStorage.getItem('access_token'))";
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(btn.previousElementSibling); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); document.execCommand('copy'); }
+    btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+  }
+  const cleanToken = raw => String(raw || '').trim().replace(/^\s*x-access-token\s*:?\s*/i, '').replace(/^["']+|["']+$/g, '').trim();
+
+  async function gsuSave(p, raw, source) {
+    const box = p && $(p + '-tok'), token = cleanToken(raw != null ? raw : box ? box.value : '');
+    if (token.length < 20) {
+      gsu.step = 2; gsu.err = "That doesn't look like a full token. It's a long string of letters and numbers; copy the whole value after X-Access-Token.";
+      return renderGmSetup(true);
+    }
+    gsu.busy = true; gsu.err = ''; renderGmSetup(true);
+    try {
+      await run('saveGroupMeToken', token);
+    } catch (e) {
+      gsu.busy = false; gsu.step = 2;
+      gsu.err = /look like/.test(e.message || '') ? e.message : 'GroupMe didn’t accept that token. Copy it again (the whole value) and paste it here.';
+      status('', false);
+      return renderGmSetup(true);
+    }
+    gsu.busy = false; gsu.step = 3; gsu.groups = null; gsu.groupsErr = '';
+    gsu.changing = true;
+    if (source === 'bookmark') gsToast('GroupMe token received');
+    renderGmSetup(true);
+    gsuLoadGroups();
+  }
+  async function gsuLoadGroups() {
+    gsu.loading = true; gsu.groupsErr = '';
+    try { gsu.groups = await callQuiet('listMyGroups'); }
+    catch (e) { gsu.groups = null; gsu.groupsErr = 'Couldn’t load your groups: ' + (e.message || e); }
+    gsu.loading = false;
+    renderGmSetup(true);
+  }
+
+  async function gsuPick(id) {
+    const grp = (gsu.groups || []).find(x => String(x.id) === String(id));
+    if (!grp || gsu.busy) return;
+    gsu.busy = true; renderGmSetup(true);
+    try {
+      await run('setGroupMeGroup', grp.id, grp.name);
+      await doAct('setSyncRunning', [true], s => { s.groupme.running = true; });
+    } catch (e) { gsu.busy = false; return renderGmSetup(true); }
+    Object.assign(gsu, { busy: false, changing: false, justConnected: true, stripOff: false, step: 3 });
+    renderGmSetup(true);
+    gsToast('GroupMe sync turned on');
+  }
+
+  async function gsuChangeChat() {
+    gsu.changing = true; gsu.step = 3; gsu.groups = null;
+    stopLive();
+    if (state.groupme.running) await doAct('setSyncRunning', [false], s => { s.groupme.running = false; });
+    renderGmSetup(true); showGmSetup();
+  }
+  function gsuCancelChange() { gsu.changing = false; renderGmSetup(true); }
+  function gsToast(text) {
+    const t = $('alertToast');
+    t.textContent = text; t.className = 'alert-toast'; t.hidden = false; void t.offsetWidth; t.classList.add('shown');
+    clearTimeout(t._gs); t._gs = setTimeout(() => { t.classList.remove('shown'); setTimeout(() => { t.hidden = true; }, 350); }, 2600);
+  }
+
+  function gmTokenFromAddress() {
+    const u = window.google && google.script && google.script.url;
+    if (!u || typeof u.getLocation !== 'function') return;
+    u.getLocation(async loc => {
+      const m = String((loc && loc.hash) || '').match(/(?:^|&)gmtoken=([^&]+)/);
+      if (!m) return;
+      try { google.script.history.replace(null, {}, ''); } catch (e) {   }
+      let token = '';
+      try { token = cleanToken(decodeURIComponent(m[1])); } catch (e) { token = ''; }
+      const g = state.groupme;
+      if (g.tokenHint && token.slice(-4) !== g.tokenHint && !(await ask('Replace the saved GroupMe token?', 'Replace'))) return;
+      if (g.tokenHint && token.slice(-4) === g.tokenHint) return;
+      gsuSave(null, token, 'bookmark');
+    });
   }
   function closeSettings() { conceal($('settingsSheet')); }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('settingsSheet').hidden && $('askSheet').hidden) closeSettings(); });
