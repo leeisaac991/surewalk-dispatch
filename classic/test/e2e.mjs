@@ -39,6 +39,9 @@ if (typeof st === 'string') { console.log(st); process.exit(1); }
 console.log('pending', st.pending.length, '| active', st.active.length, '| crews', st.crews.length, '| roster', JSON.stringify(st.rosterInfo));
 await shot('c1.png');
 
+// the "Text" column (texting computer's status per rider), when the export has one
+console.log('text status:', JSON.stringify([...st.pending, ...st.active].filter(x => x.txs).map(x => x.row + ' ' + x.txs).slice(0, 4)),
+  '| chips:', await ev(`[...${F}.document.querySelectorAll('.tag.tx-ok, .tag.tx-wait, .tag.tx-none, .tag.tx-other')].map(e => e.textContent).slice(0, 4).join(' / ')`));
 await call('setDispatcher', ['T. Tester']);
 console.log('color:', ok(await act('setTonightColor', ['#00ff00', 'A'])));
 const p = st.pending.find(x => x.row === RA), ref = { row: p.row, id: p.id };

@@ -68,7 +68,7 @@
     [1, /^(form submitted|timestamp|completion time)/], [2, /^dispatch/], [3, /^call time/], [4, /^arrival/], [5, /^wait/],
     [6, /\beid\b/], [7, /^last name/], [8, /^first name/], [9, /^phone/], [10, /^pick ?-?up/], [11, /^drop ?-?off/],
     [12, /disabilit|^ada\b/], [13, /^location$/], [14, /^(van|vehicle)/], [15, /^driver$/], [16, /^navigator$/],
-    [22, /cancel/], [23, /^notes?$/],
+    [22, /cancel/], [23, /^notes?$/], [24, /^text( status)?$/], // 24: the texting computer's status for the rider
   ];
   function layoutOf(header) {
     const h = header.map(x => String(x || '').toLowerCase().replace(/[^a-z0-9 -]/g, ' ').replace(/\s+/g, ' ').trim());
