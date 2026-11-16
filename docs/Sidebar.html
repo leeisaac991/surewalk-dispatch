@@ -806,6 +806,8 @@
 
   <div id="gmSetup" hidden></div>
   <div id="gmStrip" class="gm-strip" hidden></div>
+  <div id="rosterConflictModal" class="gm-modal" hidden></div>
+  <div id="rosterConflictNote"></div>
   <div id="status"></div>
   <div id="shiftNote"></div>
   <div id="alerts"></div>
@@ -1204,6 +1206,7 @@
     renderActive();
     renderLive();
     renderShiftChange();
+    renderRosterConflict();
     watchEmpties();
     autopilotSoon();
   }
@@ -1935,6 +1938,122 @@
 
     const splits = soon.filter(offSplit).map(b => `${offSplit(b).stays}: ${offSplit(b).who} gets off at ${end}, so this is your last ride together — you're staying on after.`);
     openChat([`Last ride, then you're off at ${end}! Thank you!`].concat(splits).join('\n'), tags);
+  }
+
+  let conflictDismissedForDate = '';
+
+  function renderRosterConflict() {
+    const rc = state && state.rosterConflict;
+    const note = $('rosterConflictNote');
+    const modal = $('rosterConflictModal');
+    if (!rc) {
+      if (note) note.innerHTML = '';
+      if (modal) modal.hidden = true;
+      return;
+    }
+
+    const curSource = rc.choice === 'active' ? rc.activeName : rc.tabName;
+    const isPrefSet = !!rc.choice;
+
+    if (note) {
+      note.innerHTML = `<div class="alert" style="background:var(--amber-bg);color:var(--amber);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;margin-bottom:8px">
+        <div style="font-size:13px">
+          <b>⚠️ Pairings conflict for tonight:</b> Using <b>${esc(curSource)}</b> tab ${isPrefSet ? '(saved choice)' : '(default)'}.
+        </div>
+        <button class="pill" style="cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--sep)" onclick="openConflictModal()">Review & Switch</button>
+      </div>`;
+    }
+
+    if (rc.needsChoice && conflictDismissedForDate !== rc.date) {
+      openConflictModal();
+    }
+  }
+
+  function openConflictModal() {
+    const rc = state && state.rosterConflict;
+    if (!rc) return;
+    const modal = $('rosterConflictModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add('gm-modal-open');
+
+    const renderShiftsList = shifts => {
+      if (!shifts || !shifts.length) return '<div class="muted">No shifts listed</div>';
+      return shifts.map(s => `
+        <div style="margin-bottom:6px">
+          <b style="color:var(--text)">${esc(s.name)}:</b>
+          ${s.crews.length ? `<ul style="margin:2px 0 0 16px;padding:0">${s.crews.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : '<span class="muted"> (0 crews)</span>'}
+        </div>
+      `).join('');
+    };
+
+    modal.innerHTML = `
+      <div class="gm-card" role="dialog" aria-modal="true" aria-labelledby="rcTitle" style="max-width:620px">
+        <button class="btn icon gm-x" aria-label="Close" onclick="closeConflictModal()">✕</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">⚠️</span>
+          <h2 id="rcTitle" style="margin:0;font-size:20px">Pairings Conflict Detected</h2>
+        </div>
+        <p class="gm-sub" style="margin-bottom:16px">Both the <b>${esc(rc.activeName)}</b> tab and <b>${esc(rc.tabName)}</b> tab define shift pairings for tonight (<b>${esc(rc.date)}</b>), but their crew assignments differ. Which roster should the panel use?</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+
+          <div style="border:${rc.choice === 'active' ? '2px solid var(--accent)' : '1px solid var(--sep)'};border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <b style="font-size:14.5px">${esc(rc.activeName)} Tab</b>
+              <span class="pill" style="font-size:11px">${rc.active.count} crews</span>
+            </div>
+            <div style="flex:1;font-size:12px;line-height:1.4;max-height:220px;overflow-y:auto;padding-right:4px">
+              ${renderShiftsList(rc.active.shifts)}
+            </div>
+            <button class="btn ${rc.choice === 'active' ? 'secondary' : 'primary'}" style="width:100%;margin-top:12px" onclick="chooseRosterSource('active')">
+              ${rc.choice === 'active' ? '✓ Using ' + esc(rc.activeName) : 'Use ' + esc(rc.activeName) + ' Tab'}
+            </button>
+          </div>
+
+          <div style="border:${rc.choice === 'pairings' ? '2px solid var(--accent)' : '1px solid var(--sep)'};border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <b style="font-size:14.5px">${esc(rc.tabName)} Tab</b>
+              <span class="pill" style="font-size:11px">${rc.tab.count} crews</span>
+            </div>
+            <div style="flex:1;font-size:12px;line-height:1.4;max-height:220px;overflow-y:auto;padding-right:4px">
+              ${renderShiftsList(rc.tab.shifts)}
+            </div>
+            <button class="btn ${rc.choice === 'pairings' ? 'secondary' : 'primary'}" style="width:100%;margin-top:12px" onclick="chooseRosterSource('pairings')">
+              ${rc.choice === 'pairings' ? '✓ Using ' + esc(rc.tabName) : 'Use ' + esc(rc.tabName) + ' Tab'}
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn text" onclick="closeConflictModal()">Dismiss for now</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function closeConflictModal() {
+    const rc = state && state.rosterConflict;
+    if (rc) conflictDismissedForDate = rc.date;
+    const modal = $('rosterConflictModal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('gm-modal-open');
+  }
+
+  function chooseRosterSource(source) {
+    const rc = state && state.rosterConflict;
+    const date = rc ? rc.date : '';
+    status('Switching roster source to ' + source + '...');
+    call('act', 'setRosterSource', [source, date]).then(res => {
+      closeConflictModal();
+      if (res && res.state) {
+        state = res.state;
+        render();
+      }
+      status('Now using ' + (source === 'active' ? (rc ? rc.activeName : 'active') : (rc ? rc.tabName : 'pairings')) + ' tab.');
+    }).catch(err => {
+      status('Failed to switch roster: ' + (err && err.message ? err.message : err), true);
+    });
   }
 
   async function saveDispatcher(name) {

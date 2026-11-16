@@ -2208,7 +2208,7 @@ function sheet_() {
 
 let SP_CACHE_ = null;
 
-const PER_USER_KEYS_ = new Set(['GROUPME_TOKEN', 'GROUPME_ME_ID', 'GROUPME_ME_NAME']);
+const PER_USER_KEYS_ = new Set(['GROUPME_TOKEN', 'GROUPME_ME_ID', 'GROUPME_ME_NAME', 'ROSTER_SOURCE_PREF']);
 let UP_CACHE_ = null;
 function SP_() {
   const real = PropertiesService.getScriptProperties();
@@ -2391,8 +2391,12 @@ function setTonightColor(hex, which) {
 }
 
 let ROSTER_CACHE_ = null;
+let ROSTER_CONFLICT_CACHE_ = null;
 function roster_(sh) {
-  if (!ROSTER_CACHE_) ROSTER_CACHE_ = { r: parseRoster_(sh, lastRideRow_(sh)) };
+  if (!ROSTER_CACHE_) {
+    const r = parseRoster_(sh, lastRideRow_(sh));
+    ROSTER_CACHE_ = { r, conflict: ROSTER_CONFLICT_CACHE_ };
+  }
   return ROSTER_CACHE_.r;
 }
 
@@ -2473,13 +2477,8 @@ function rosterDateKey_(s) {
   return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
 }
 
-function parseRoster_(sh, lastRide) {
-  const lastRow = sh.getLastRow();
-  if (lastRow <= lastRide) return null;
-  const width = Math.min(sh.getLastColumn(), 26);
-  const v = sh.getRange(lastRide + 1, 1, lastRow - lastRide, width).getDisplayValues()
-    .map(r => r.map(c => String(c).trim()));
-
+function parseRosterGrid_(v) {
+  if (!v || !v.length) return null;
   const starts = v.map((r, i) => (rosterDateKey_(r[0]) ? i : -1)).filter(i => i >= 0);
   if (!starts.length) return null;
   const night = nightKey_(new Date());
@@ -2531,6 +2530,138 @@ function parseRoster_(sh, lastRide) {
   });
   markMidMoves_(shifts);
   return { date: rosterDateKey_(block[0][0]), shifts };
+}
+
+function summarizeRoster_(roster, sourceName) {
+  if (!roster) return { name: sourceName, date: '', count: 0, summary: 'No roster found', shifts: [] };
+  const shiftSums = (roster.shifts || []).map(s => {
+    const crewStrs = (s.crews || []).map(c => {
+      const pair = c.nav ? `${c.driver} & ${c.nav}` : c.driver;
+      const veh = c.vehicle || c.van || '';
+      return veh ? `${pair} (${veh})` : pair;
+    });
+    return { name: s.name, count: s.crews.length, crews: crewStrs };
+  });
+  const totalCrews = shiftSums.reduce((sum, s) => sum + s.count, 0);
+  const shiftCounts = shiftSums.map(s => `${s.name}: ${s.count}`).join(', ');
+  const summary = `${sourceName}: ${totalCrews} crews (${shiftCounts || 'none'})`;
+  return {
+    name: sourceName,
+    date: roster.date,
+    count: totalCrews,
+    summary,
+    shifts: shiftSums
+  };
+}
+
+function rostersEqual_(r1, r2) {
+  if (!r1 || !r2) return false;
+  if (r1.date !== r2.date) return false;
+  const s1 = r1.shifts || [], s2 = r2.shifts || [];
+  if (s1.length !== s2.length) return false;
+  for (let i = 0; i < s1.length; i++) {
+    const sh1 = s1[i], sh2 = s2[i];
+    if (sh1.name !== sh2.name) return false;
+    const c1 = sh1.crews || [], c2 = sh2.crews || [];
+    if (c1.length !== c2.length) return false;
+    const sorted1 = c1.slice().sort((a, b) => pairKey_(a.driver, a.nav).localeCompare(pairKey_(b.driver, b.nav)));
+    const sorted2 = c2.slice().sort((a, b) => pairKey_(a.driver, a.nav).localeCompare(pairKey_(b.driver, b.nav)));
+    for (let j = 0; j < sorted1.length; j++) {
+      const a = sorted1[j], b = sorted2[j];
+      if (pairKey_(a.driver, a.nav) !== pairKey_(b.driver, b.nav)) return false;
+      if (String(a.van || '').toLowerCase() !== String(b.van || '').toLowerCase()) return false;
+      if (String(a.vehicle || '').toLowerCase() !== String(b.vehicle || '').toLowerCase()) return false;
+    }
+  }
+  return true;
+}
+
+function getRosterConflict() {
+  return ROSTER_CONFLICT_CACHE_;
+}
+
+function getRosterSourcePref_(date) {
+  let raw = '';
+  try { raw = SP_().getProperty('ROSTER_SOURCE_PREF'); } catch (e) {}
+  if (!raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!date || p.date === date) return p.source;
+  } catch (e) {}
+  return null;
+}
+
+function setRosterSource(source, date) {
+  if (source !== 'active' && source !== 'pairings') throw new Error('Invalid roster source: ' + source);
+  const key = 'ROSTER_SOURCE_PREF';
+  const val = JSON.stringify({ source, date: date || nightKey_(new Date()), at: Date.now() });
+  try { SP_().setProperty(key, val); } catch (e) {}
+  SP_CACHE_ = null; UP_CACHE_ = null; ROSTER_CACHE_ = null;
+  return getState(true);
+}
+
+function parseRoster_(sh, lastRide) {
+  ROSTER_CONFLICT_CACHE_ = null;
+  const activeName = sh.getName();
+
+  let activeRoster = null;
+  const lastRow = sh.getLastRow();
+  if (lastRow > lastRide) {
+    const width = Math.min(sh.getLastColumn(), 26);
+    const v = sh.getRange(lastRide + 1, 1, lastRow - lastRide, width).getDisplayValues()
+      .map(r => r.map(c => String(c).trim()));
+    activeRoster = parseRosterGrid_(v);
+  }
+
+  let tabRoster = null;
+  let tabName = 'Pairings';
+  if (sh.s) {
+    if (sh.s.pairings && sh.s.pairings.length) {
+      tabName = sh.s.pairingsName || 'Pairings';
+      tabRoster = parseRosterGrid_(sh.s.pairings.map(r => r.map(c => String(c).trim())));
+    }
+  } else {
+    const parent = sh.getParent();
+    if (parent && parent.getSheets) {
+      const pt = parent.getSheets().find(s => /pairi*ng/i.test(s.getName()) && s.getName() !== sh.getName());
+      if (pt) {
+        tabName = pt.getName();
+        const lr = pt.getLastRow();
+        if (lr > 0) {
+          const w = Math.min(pt.getLastColumn(), 26);
+          const pv = pt.getRange(1, 1, lr, w).getDisplayValues().map(r => r.map(c => String(c).trim()));
+          tabRoster = parseRosterGrid_(pv);
+        }
+      }
+    }
+  }
+
+  if (!activeRoster && !tabRoster) return null;
+  if (activeRoster && !tabRoster) return activeRoster;
+  if (!activeRoster && tabRoster) return tabRoster;
+
+  if (activeRoster.date !== tabRoster.date) {
+    return activeRoster.date > tabRoster.date ? activeRoster : tabRoster;
+  }
+
+  if (rostersEqual_(activeRoster, tabRoster)) {
+    return activeRoster;
+  }
+
+  const pref = getRosterSourcePref_(activeRoster.date);
+  ROSTER_CONFLICT_CACHE_ = {
+    date: activeRoster.date,
+    activeName: activeName,
+    tabName: tabName,
+    active: summarizeRoster_(activeRoster, activeName),
+    tab: summarizeRoster_(tabRoster, tabName),
+    choice: pref || null,
+    needsChoice: !pref
+  };
+
+  if (pref === 'active') return activeRoster;
+  if (pref === 'pairings') return tabRoster;
+  return tabRoster;
 }
 
 function markMidMoves_(shifts) {
@@ -2720,7 +2851,8 @@ function tonight_() {
     if (ride.picked && ride.driver && nightKey_(ts) === night) pickedTonight.push(ride);
   });
 
-  const roster = parseRoster_(sh, last);
+  const roster = roster_(sh);
+  const rosterConflict = ROSTER_CACHE_ ? ROSTER_CACHE_.conflict : null;
   const shiftsOn = activeShiftNames_(roster);
   const crews = {};
   const nowMin = (d => { const t = Number(Utilities.formatDate(d, CFG.TZ, 'H')) * 60 + Number(Utilities.formatDate(d, CFG.TZ, 'm')); return t < 12 * 60 ? t + 1440 : t; })(new Date());
@@ -2757,6 +2889,7 @@ function tonight_() {
     rosterInfo: { sheet: sh.getParent().getName() + ' › ' + sh.getName(), found: !!roster, date: roster ? roster.date : '',
                   counts: roster ? roster.shifts.map(s => ({ name: s.name, n: s.crews.length })) : [] },
     rosterDate: roster ? roster.date : '',
+    rosterConflict,
   };
 }
 
@@ -2810,6 +2943,7 @@ function getStateCore_(fast) {
     sig: tonight.sig,
     lastRide: tonight.lastRide,
     wait: tonight.wait, shifts: tonight.shifts, shiftsOn: tonight.shiftsOn, rosterDate: tonight.rosterDate, rosterInfo: tonight.rosterInfo,
+    rosterConflict: tonight.rosterConflict,
     removedCrews,
 
     relay: loadRelays_().map(x => Object.assign(x, { crewKey: (crews.find(c => samePair_(c, x)) || {}).key || '',
@@ -2828,7 +2962,7 @@ function act(name, args) {
 
   const actions = { assignRides, unassignRides, moveRides, markArrived, markPicked, cancelRide, markDuplicate, markNotAda, editRide, setCrewStatus, setCrewState, restoreRide, dismissLostRide,
     saveCrew, removeCrews, setTonightColor, toggleShift, dismissChat, setSyncRunning, clearGroupMeLog,
-    saveGroupMeToken, setGroupMeGroup, forgetGroupMeToken, undoAction };
+    saveGroupMeToken, setGroupMeGroup, forgetGroupMeToken, undoAction, setRosterSource };
   if (!Object.prototype.hasOwnProperty.call(actions, name)) throw new Error(`Unknown action "${name}" — re-paste all files.`);
   const how = UNDOABLE_[name];
   let before = null;
