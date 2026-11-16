@@ -420,6 +420,7 @@
       if (out.ops && out.ops.length) await applyOps(toExcelOps(out.ops, x.L));
       if (!out.ok) { lastPeek.key = ''; throw new Error(out.error || 'Error'); }
       if (peekKey) { lastPeek.key = peekKey; lastPeek.result = out.result; } else lastPeek.key = '';
+      if (out.result && typeof out.result === 'object' && 'build' in out.result) out.result.build = shownBuild(); // Settings ▸ Version: this build's time
       return out.result;
     });
     chain = job.catch(() => {});
@@ -478,7 +479,39 @@
     document.getElementById('swcFrame').srcdoc = pageHtml();
     document.getElementById('swcPop').onclick = popOut;
     document.getElementById('swcRestart').onclick = () => location.reload();
+    showUpdate();
   }
+
+  /*
+   * Newer version on the add-in's site? Excel keeps a side panel running for hours (and restores it when the
+   * workbook reopens), so an open panel checks the site's version.json every 2 minutes: a fingerprint of
+   * backend.js + Sidebar.html + host.js, written by build.sh with this same hash. Different from the files this
+   * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
+   */
+  const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
+  const BUILT_AT = '2026-11-15 20:15:28'; // stamped by build.sh
+  let newer = false, newerAt = '';
+  // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
+  const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
+  function showUpdate() {
+    const b = document.getElementById('swcRestart'), msg = document.getElementById('swcMsg');
+    if (!newer || !b) return;
+    b.textContent = '↻ Update';
+    b.title = 'A newer version of the panel is out: restart to get it';
+    b.style.background = '#fff4c2';
+    if (msg) msg.textContent = 'New version — press Update';
+  }
+  async function checkUpdate() {
+    if (!BUILD || newer || !window.__SWC_HOSTED) return;
+    try {
+      const r = await fetch(new URL('version.json', location.href).href, { cache: 'no-cache' });
+      if (!r.ok) return;
+      const v = await r.json();
+      if (!v || !v.build) return;
+      if (v.build !== BUILD) { newer = true; newerAt = v.at || ''; showUpdate(); }
+    } catch (e) { /* offline: next time */ }
+  }
+  if (!SWC.test) { checkUpdate(); setInterval(checkUpdate, 120000); } // tests change the files (a test clock) and call it themselves
   // Excel add-ins can't show alert boxes, so problems are explained in a note under the bar.
   function note(html) {
     const n = document.getElementById('swcNote');
@@ -574,6 +607,7 @@
     }
   }
   window.SWC_HOST = { call: (fn, args) => rpc(fn, args), reload: () => location.reload(), popOut, // used by the panel page(s)
-    readSheet, virtualSnap, pickRidesTab, get ridesTab() { return ridesTab; }, toExcelOps, rpc, get props() { return props; } }; // console / tests
+    readSheet, virtualSnap, pickRidesTab, get ridesTab() { return ridesTab; }, toExcelOps, rpc, get props() { return props; }, // console / tests
+    checkUpdate, get update() { return { build: BUILD, at: BUILT_AT, newer, newerAt }; } };
   Office.onReady(() => start());
 })();

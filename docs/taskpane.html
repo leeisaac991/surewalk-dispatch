@@ -18,7 +18,9 @@
     try {
       // every file is fetched fresh (never a stale browser copy), so a reopen always gets the newest panel
       if (!window.__SWC) { const [backend, sidebar] = await Promise.all([get('backend.js'), get('Sidebar.html')]); window.__SWC = { backend, sidebar }; }
-      const s = document.createElement('script'); s.textContent = await get('host.js'); document.body.appendChild(s);
+      const host = await get('host.js');
+      window.__SWC.host = window.__SWC.host || host; // with backend + sidebar: the build this panel runs (see version.json)
+      const s = document.createElement('script'); s.textContent = host; document.body.appendChild(s);
     } catch (e) {
       document.getElementById('loading').innerHTML = '<span style="color:#c62828">Could not load the panel: ' + e.message + '. Check the internet connection and reopen it.</span>';
     }

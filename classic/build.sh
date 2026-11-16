@@ -21,7 +21,8 @@ sed -i -E "s/SPREADSHEET_ID: '[^']*'/SPREADSHEET_ID: ''/" "$TMP/backend.js"
 node "$HERE/strip-comments.js" "$TMP/backend.js" > "$OUT/backend.js"
 sed -E 's#https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec#https://script.google.com/macros/s/RELOAD/exec#g' "$GS/Sidebar.html" > "$TMP/Sidebar.html"
 node "$HERE/strip-comments.js" --html "$TMP/Sidebar.html" > "$OUT/Sidebar.html"
-cp "$HERE/host.js" "$OUT/host.js"
+BUILT_AT=$(TZ=America/Chicago date "+%Y-%m-%d %H:%M:%S")
+sed "s/{{BUILT_AT}}/$BUILT_AT/" "$HERE/host.js" > "$OUT/host.js"
 node --check "$OUT/backend.js"
 node --check "$OUT/host.js"
 python3 -c 'import re,sys;print("\n".join(re.findall(r"<script>(.*?)</script>",open(sys.argv[1]).read(),re.S)))' "$OUT/Sidebar.html" > "$TMP/side.js" && node --check "$TMP/side.js"
@@ -34,5 +35,12 @@ cp "$HERE/site/taskpane.html" "$HERE/site/dialog.html" "$OUT/backend.js" "$OUT/S
 cp "$HERE/../excel-addin/assets/"*.png "$SITE/assets/"
 sed "s#{{BASE}}#$SITE_BASE#g" "$HERE/site/manifest.template.xml" > "$SITE/manifest.xml"
 touch "$SITE/.nojekyll"
+# The build an open add-in panel compares with (see checkUpdate in host.js): the same hash over the same files.
+node -e '
+const fs = require("fs"), d = process.argv[1];
+const s = ["backend.js", "Sidebar.html", "host.js"].map(f => fs.readFileSync(d + "/" + f, "utf8")).join("\n");
+let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+fs.writeFileSync(d + "/version.json", JSON.stringify({ build: (h >>> 0).toString(36), at: process.argv[2] }) + "\n");
+' "$SITE" "$BUILT_AT"
 python3 -c 'import sys,xml.dom.minidom as m; m.parse(sys.argv[1])' "$SITE/manifest.xml"
 echo "built add-in site $SITE (manifest points at $SITE_BASE)"
