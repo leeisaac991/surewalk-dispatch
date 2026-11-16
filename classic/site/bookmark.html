@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get GroupMe token · SURE Walk</title>
+<style>
+  :root { --bg: #f2f2f7; --card: #fff; --text: #1d1d1f; --muted: #6e6e73; --line: #e3e3e8; --accent: #bf5700; --accent-bg: #fbeee4; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #000; --card: #1c1c1e; --text: #f5f5f7; --muted: #a1a1a6; --line: #3a3a3c; --accent: #ff8a3d; --accent-bg: #3d2a1c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 16px 60px; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-bottom: 18px; }
+  h2 { font-size: 18px; margin: 0 0 14px; }
+  .bm { display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border: 2px dashed var(--accent); border-radius: 12px;
+    background: var(--accent-bg); color: var(--accent); font-weight: 700; font-size: 18px; text-decoration: none; cursor: grab; }
+  .bm svg { width: 22px; height: 22px; }
+  ol { margin: 16px 0 0; padding-left: 22px; display: grid; gap: 8px; }
+  kbd { font: inherit; font-size: 14px; font-weight: 600; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .flash { color: var(--accent); font-size: 14px; min-height: 21px; margin-top: 10px; }
+  details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 12.5px; margin: 12px 0 8px; }
+  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+  .note { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Get GroupMe token</h1>
+  <p class="sub">A bookmark for SURE Walk dispatchers. Set it up once; after that, one click gets your GroupMe token for the dispatch panel.</p>
+
+  <section class="card">
+    <h2>1 · Add the bookmark (once)</h2>
+    <a class="bm" id="bm" draggable="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Get GroupMe token</a>
+    <div class="flash" id="flash" role="status"></div>
+    <ol>
+      <li>Show your bookmarks bar: <kbd>Ctrl</kbd> <kbd>⇧ Shift</kbd> <kbd>B</kbd> (Mac: <kbd>⌘</kbd> <kbd>⇧ Shift</kbd> <kbd>B</kbd>).</li>
+      <li>Drag the orange button above onto the bookmarks bar.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>2 · Use it</h2>
+    <ol style="margin-top:0">
+      <li>Open <a href="https://web.groupme.com" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">web.groupme.com</a> (logged in).</li>
+      <li>Click your <b>Get GroupMe token</b> bookmark. Your token is copied.</li>
+      <li>Go back to the SURE Walk panel and paste it (<kbd>Ctrl</kbd> <kbd>V</kbd>) in <b>Connect GroupMe</b>. It saves by itself.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Can't drag it? Make the bookmark by hand</summary>
+      <ol>
+        <li>Right-click the bookmarks bar ▸ <b>Add page…</b></li>
+        <li>Name: <b>Get GroupMe token</b>. URL: paste this:</li>
+      </ol>
+      <pre id="code"></pre>
+      <button id="copy">Copy</button>
+    </details>
+  </section>
+
+  <p class="note">The token works like a password for your GroupMe account. The bookmark only copies it to your clipboard; it never sends it anywhere. Don't paste it in a chat.</p>
+</main>
+<script>
+  // The bookmarklet (same as the dispatch panel's "Get GroupMe token"): on web.groupme.com it copies the token.
+  var BM = "javascript:(()=>{if(!/groupme\\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^\"|\"$/g,'');navigator.clipboard.writeText(t).then(()=>alert('GroupMe token copied. Paste it in the SURE Walk panel.'),()=>prompt('Copy your GroupMe token:',t))})()";
+  var a = document.getElementById('bm');
+  a.setAttribute('href', BM);
+  a.addEventListener('click', function (e) { // here it would do nothing useful: it's meant for the bookmarks bar
+    e.preventDefault();
+    var f = document.getElementById('flash'); f.textContent = "Drag it to the bookmarks bar, don't click it.";
+    clearTimeout(f._t); f._t = setTimeout(function () { f.textContent = ''; }, 2500);
+  });
+  document.getElementById('code').textContent = BM;
+  document.getElementById('copy').addEventListener('click', function () {
+    var b = this;
+    navigator.clipboard.writeText(BM).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1800); });
+  });
+</script>
+</body>
+</html>

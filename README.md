@@ -18,6 +18,28 @@ GroupMe sync (drivers' "at / picked / empty"), ❤️ markers on ride posts, the
 Each dispatcher installs it once. The add-in loads the newest panel each time it opens, so updates reach everyone
 without reinstalling. Settings, crew edits and the GroupMe login are saved in each dispatcher's browser.
 
+## Get GroupMe token (bookmark)
+The panel needs each dispatcher's GroupMe token once (**Connect GroupMe**). This bookmark gets it in one click.
+
+**➜ Open https://leeisaac991.github.io/surewalk-dispatch/bookmark.html and drag the orange "Get GroupMe token"
+button to your bookmarks bar** (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>B</kbd> shows the bar). GitHub can't show a
+draggable bookmark here, so it lives on that page.
+
+Then, any time: open **web.groupme.com** (logged in) ▸ click **Get GroupMe token** (your token is copied) ▸ in the panel's
+**Connect GroupMe**, press <kbd>Ctrl</kbd> <kbd>V</kbd>. It saves by itself.
+
+<details><summary>Make the bookmark by hand instead</summary>
+
+Right-click the bookmarks bar ▸ **Add page…** ▸ name it `Get GroupMe token` ▸ paste this as the URL:
+
+```
+javascript:(()=>{if(!/groupme\.com$/.test(location.hostname)){alert('Open web.groupme.com first, then click this bookmark.');return}let t=localStorage.getItem('access_token');if(!t){alert('No token found. Log in to GroupMe, then try again.');return}t=t.replace(/^"|"$/g,'');navigator.clipboard.writeText(t).then(()=>alert('GroupMe token copied. Paste it in the SURE Walk panel.'),()=>prompt('Copy your GroupMe token:',t))})()
+```
+</details>
+
+The token works like a password for your GroupMe account: the bookmark only copies it to your clipboard and never sends
+it anywhere. Don't paste it in a chat.
+
 ## Or run it through Script Lab (no install, but no Pop out)
 Snippet (public gist): https://gist.github.com/leeisaac991/797e865d8e0bc875907aca9f2c645a62. In Excel: **Home ▸
 Add-ins** ▸ add **Script Lab** ▸ **Script Lab ▸ Code ▸ ☰ ▸ Import** ▸ paste the gist link ▸ **Import** ▸ **Script Lab
