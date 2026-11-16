@@ -523,7 +523,7 @@
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-15 23:17:31'; // stamped by build.sh
+  const BUILT_AT = '2026-11-15 23:26:57'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);

@@ -31,7 +31,7 @@ echo "built $OUT: $(du -h "$OUT/backend.js" | cut -f1) backend, $(du -h "$OUT/Si
 # The SURE Walk add-in's site (served from ../docs by GitHub Pages): side panel + pop-out window + the files above.
 SITE="${SITE:-$HERE/../docs}"; SITE_BASE="${SITE_BASE:-https://leeisaac991.github.io/surewalk-dispatch/}"
 mkdir -p "$SITE/assets"
-cp "$HERE/site/taskpane.html" "$HERE/site/dialog.html" "$OUT/backend.js" "$OUT/Sidebar.html" "$OUT/host.js" "$SITE/"
+cp "$HERE/site/taskpane.html" "$HERE/site/dialog.html" "$HERE/site/bookmark.html" "$OUT/backend.js" "$OUT/Sidebar.html" "$OUT/host.js" "$SITE/"
 cp "$HERE/../excel-addin/assets/"*.png "$SITE/assets/"
 sed "s#{{BASE}}#$SITE_BASE#g" "$HERE/site/manifest.template.xml" > "$SITE/manifest.xml"
 touch "$SITE/.nojekyll"
