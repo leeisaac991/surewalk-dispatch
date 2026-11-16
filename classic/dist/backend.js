@@ -147,8 +147,8 @@ const PLACES = {
 
   'Jester':               ['jester', 'jester center', 'jester circle', 'jester east', 'jester e', 'east jester', 'jcl',
                           'j2', 'j2 dining', 'j2 dining hall', 'jester 2', 'jester j2', 'j1', 'j1 dining', 'j1 dining hall',
-                          'jeast', 'j east', 'j-east'],
-  'Jester West':          ['jwest', 'j west', 'j-west', 'jester west'],
+                          'jeast', 'j east', 'j-east',
+                          'jester west', 'jwest', 'j west', 'j-west', 'west jester', 'jester w'],
   'Kinsolving':           ['kins', 'kinsolving', 'kiins', 'kinsoving', 'kinsolvinfg'],
   'San Jacinto':          ['san jac', 'sanjac', 'san jacinto', 'sacjac', 'san jac dorms', 'san jacinto dorms', 'sjc', 'cypress cafe', 'cypress', 'cypress bend cafe'],
   'Moore-Hill':           ['moore hill', 'moorehill', 'morehill', 'more hill', 'moore'],

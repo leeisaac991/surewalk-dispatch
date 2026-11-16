@@ -238,7 +238,7 @@
   "writes": "arrive row 100 22:30; arrive row 101 22:30"
  },
  {
-  "name": "R4: 'at jester' two different Jesters → ask",
+  "name": "R4: 'at jester' with Jester West + Jester East → both (one place)",
   "text": "at jester",
   "rides": [
    {
@@ -250,8 +250,8 @@
     "pickup": "Jester East"
    }
   ],
-  "expect": "Arrived: Leo",
-  "writes": "arrive row 101 22:30"
+  "expect": "Arrived: Maya, Leo",
+  "writes": "arrive row 100 22:30; arrive row 101 22:30"
  },
  {
   "name": "R5: 'picked both greg' but 3 at greg → ask",
@@ -362,5 +362,45 @@
   ],
   "expect": "At + picked: Leo — check: said 2, but only Maya picks up at \"greg\" — also took Leo (Jester West)",
   "writes": "arrive row 101 22:30; pick row 101 (same minute)"
+ },
+ {
+  "name": "J1: 'at/picked jester' — Jester West, Jester, Jester East all count",
+  "text": "at/picked jester",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Jester West"
+   },
+   {
+    "first": "Leo",
+    "pickup": "Jester"
+   },
+   {
+    "first": "Zoe",
+    "pickup": "Jester East"
+   },
+   {
+    "first": "Ann",
+    "pickup": "PCL"
+   }
+  ],
+  "expect": "At + picked: Maya, Leo, Zoe",
+  "writes": "arrive row 100 22:30; pick row 100 (same minute); arrive row 101 22:30; pick row 101 (same minute); arrive row 102 22:30; pick row 102 (same minute)"
+ },
+ {
+  "name": "J2: 'at jester west' also covers a rider who wrote just 'Jester'",
+  "text": "at jester west",
+  "rides": [
+   {
+    "first": "Maya",
+    "pickup": "Jester West"
+   },
+   {
+    "first": "Leo",
+    "pickup": "jester"
+   }
+  ],
+  "expect": "Arrived: Maya, Leo",
+  "writes": "arrive row 100 22:30; arrive row 101 22:30"
  }
 ]
