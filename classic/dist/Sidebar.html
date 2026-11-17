@@ -445,10 +445,9 @@
   .tag.ada { background: var(--red-bg); color: var(--red); }
   
   
-  .tag.tx-ok { background: var(--green-bg); color: var(--green-text); }
-  .tag.tx-wait { background: var(--break-bg); color: var(--break); }
-  .tag.tx-none { background: var(--amber-bg); color: var(--amber); }
-  .tag.tx-other { background: var(--fill); color: var(--label2); }
+  .tx-ic { flex: none; align-self: center; display: grid; place-items: center; margin-left: auto; color: var(--green-text); }
+  .tx-ic svg { width: 18px; height: 18px; }
+  .tx-ic + .more, .riders li .tx-ic + .more { margin-left: 4px; }
   .rsub .tag.ada, .sugg-main .tag.ada { background: var(--red); color: #fff; font-weight: 800; padding: 2px 8px; letter-spacing: .01em; }
   .prow.ada { background: color-mix(in srgb, var(--red) 13%, transparent); box-shadow: inset 5px 0 0 var(--red); }
   .prow.ada.sel { background: color-mix(in srgb, var(--red) 22%, var(--accent-bg)); }
@@ -1321,24 +1320,18 @@
 
   const justMoody = s => { const w = String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').split(/\s+/).filter(x => x && !['the', 'at', 'bldg', 'building', 'hall', 'please'].includes(x)); return w.length === 1 && w[0] === 'moody'; };
 
-  function txChip(r) {
+  function txIcon(r) {
     if (!r.txsCol) return '';
-    const minsSince = hm => { const m = /(\d{1,2}):(\d{2})\s*([AP]M)?/i.exec(String(hm || '')); if (!m) return null;
-      let h = +m[1]; if (m[3]) h = (h % 12) + (/pm/i.test(m[3]) ? 12 : 0);
-      const d = new Date(), diff = (d.getHours() * 60 + d.getMinutes() - (h * 60 + +m[2]) + 1440) % 1440; return diff < 720 ? diff : null; };
-    const c = String(r.txs || '').trim(), t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(c);
-    if (t) return `<span class="tag tx-ok" title="Confirmed by text at ${esc(t[0])}">✓ Confirmed ${esc(t[1])}</span>`;
-    if (r.driver || r.picked || !r.call || r.disp) return '';
-    const m = minsSince(r.call);
-    if (m == null) return '';
-    return m >= 10 ? `<span class="tag tx-none" title="Texted at ${esc(r.call)}, no YES yet: call them">! Not confirmed ${m}m</span>`
-      : `<span class="tag tx-wait" title="Texted at ${esc(r.call)}, waiting for their YES">Texted ${m < 1 ? 'just now' : m + 'm'}</span>`;
+    const t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(String(r.txs || '').trim());
+    if (!t) return '';
+    const tip = `Confirmed by text at ${esc(t[0].trim())}`;
+    return `<span class="tx-ic ok" role="img" aria-label="${tip}" title="${tip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3C6.5 3 3 6.6 3 11c0 2.2 1 4.2 2.6 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.5 0 9-3.6 9-8.2S17.5 3 12 3z"/><path d="M8.5 11.2l2.4 2.4 4.6-4.8" stroke-width="2.3"/></svg></span>`;
   }
   function rideBody(r, extra) {
     if (justMoody(r.pickup) || justMoody(r.dropoff)) extra = `<span class="tag posted" title="Just “Moody”: the Moody Center (arena) or DMC (Dealey Center)? Check with the rider">Moody: Center or DMC?</span>` + (extra || '');
     const zone = r.zone || r.loc || 'Off';
     return `<div class="rroute">${esc(r.pickup)}<span class="arrow">→</span>${esc(r.dropoff)}<span class="tag zone" title="Location (from the drop-off; unknown places count as Off)">${esc(zone)}</span></div>
-      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${txChip(r)}${extra || ''}</div>`;
+      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${extra || ''}</div>`;
   }
   function pendingRow(r, counts, fresh) {
     return `
@@ -1352,7 +1345,7 @@
           ${r.dupOf ? `<div class="warn-line"><span class="tag dup" style="margin:0">possible duplicate of row ${r.dupOf.row} (${esc(r.dupOf.first)} ${esc(r.dupOf.time)})</span></div>` : ''}
           ${r.posted ? `<div class="warn-line"><span class="tag posted" style="margin:0">⚠ already posted ${esc(r.posted.t)} by ${esc(r.posted.by)}</span></div>` : ''}
         </div>
-        <button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button>
+        ${txIcon(r)}<button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button>
       </div>${menu(r, false)}`;
   }
 
@@ -1459,7 +1452,7 @@
         <div class="es">${b.status === 'available' ? `EMPTY${b.sinceMs ? ` ${mins(b.sinceMs)}m` : ''}` : esc(String(b.status).toUpperCase())}${cap ? ` · ${rides.length}/${cap} seats` : ''}${b.vehicle ? ' · ' + esc(b.vehicle) : ''}</div></div>
         ${rides.length ? `<div class="riders">${rides.map(r => `
           <div class="prow staged${r.ada ? ' ada' : ''}" ${vtn('s' + r.id)} draggable="true" ondragstart="dragStaged(event, ${js(r.id)})" ondragend="dragDone()" title="Drag back to Pending or to another crew">
-            <div class="pmain">${rideBody(r)}</div>
+            <div class="pmain">${rideBody(r)}</div>${txIcon(r)}
             <button class="more" title="Take out of this ride" onclick="event.stopPropagation(); unstageBtn(${js(r.id)})">✕</button></div>`).join('')}</div>
           <button class="primary ecrew-go" onclick="assignStaged(${js(b.key)})"${cap && rides.length > cap ? ' disabled' : ''}>${cap && rides.length > cap ? `Only ${cap} seats` : `Assign ${rides.length} ride${rides.length > 1 ? 's' : ''}`}</button>`
         : '<div class="ehint">Drag riders here</div>'}</div>`;
@@ -2168,7 +2161,7 @@
                   (r.lost ? `<span class="tag posted" title="The panel sent this ride out, but the sheet no longer shows it in progress">⚠ ${esc(r.lost)}</span>` : ''))}
                   ${r.lost === 'crew missing in sheet' ? `<button class="chatbtn" onclick="event.stopPropagation(); restoreRide(${js(refOf(r))})">Restore</button>` : ''}
                   ${r.lost ? `<button class="chatbtn" style="color:var(--red)" onclick="event.stopPropagation(); dismissLostRide(${js(refOf(r))})" title="Remove this ride from the dispatch panel">Remove</button>` : ''}</div>
-                <button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button></div>
+                ${txIcon(r)}<button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button></div>
               ${openMenus.has(r.row) ? `<div>${menu(r, true)}</div>` : ''}`; }).join('')}
             </div>${openThreads.has(gKey) ? `<div class="${appearIf('t' + gKey)}">${thread(gIds)}</div>` : ''}</div>`;
         }).join('')}
