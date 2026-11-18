@@ -221,8 +221,8 @@
       // The shift roster: its own tab ("Pairings") when the workbook has one, else the block under the rides.
       ctx.workbook.worksheets.load('items/name');
       await ctx.sync();
-      const pt = ctx.workbook.worksheets.items.find(s => /pairing/i.test(s.name) && s.name !== ws.name);
-      let pairings = null;
+      const pt = ctx.workbook.worksheets.items.find(s => /pairi*ng/i.test(s.name) && s.name !== ws.name);
+      let pairings = null, pairingsName = pt ? pt.name : 'Pairings';
       if (pt) {
         const pu = pt.getUsedRangeOrNullObject(true);
         pu.load('rowIndex,rowCount');
@@ -234,7 +234,7 @@
           pairings = pr.text.map(r => r.map(x => String(x == null ? '' : x).slice(0, 300)));
         }
       }
-      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells, pairings, probe };
+      return { book: ctx.workbook.name, name: ws.name, lastRow, top, L, cells, pairings, pairingsName, probe };
     });
     await clearCopiedColors(got);
     cache = got; cacheAt = Date.now();
@@ -287,9 +287,10 @@
   // The snapshot Excel.gs expects, in the OLD column layout (see apps-script/Excel.gs XlSheet_).
   function virtualSnap(x) {
     const rows = {}, L = x.L;
+    let hasActiveRoster = false;
     Object.keys(x.cells).forEach(rk => {
       const r = +rk, src = x.cells[r], d = [], v = {}, f = {}, bg = [], fc = [];
-      if (x.pairings && r > L.lastRide) return; // the roster comes from the Pairings tab (added below)
+      if (r > L.lastRide) hasActiveRoster = true;
       let any = false;
       for (let k = 1; k <= VW; k++) {
         if (k === 1 && L.composite && r <= L.lastRide) { // the timestamp the original code expects, from Date + Submitted Time
@@ -319,7 +320,7 @@
     });
     // The Pairings tab, shown to the original code where it looks for the roster: right under the rides (one blank row).
     let lastRow = x.lastRow;
-    if (x.pairings) {
+    if (!hasActiveRoster && x.pairings) {
       x.pairings.forEach((line, i) => {
         const d = line.slice(0, VW);
         while (d.length && d[d.length - 1] === '') d.pop();
@@ -327,7 +328,7 @@
       });
       lastRow = L.lastRide + 1 + x.pairings.length;
     }
-    return { book: x.book, name: x.name, lastRow, lastCol: VW, width: VW, top: x.top, rows };
+    return { book: x.book, name: x.name, lastRow, lastCol: VW, width: VW, top: x.top, rows, pairings: x.pairings, pairingsName: x.pairingsName };
   }
 
   /* ---------------- writing: old-layout ops -> Excel ---------------- */

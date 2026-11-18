@@ -44,7 +44,7 @@ await shot('c1.png');
 
 // the "Text" column (texting computer's status per rider), when the export has one
 console.log('text status:', JSON.stringify([...st.pending, ...st.active].filter(x => x.txs).map(x => x.row + ' ' + x.txs).slice(0, 4)),
-  '| chips:', await ev(`[...${F}.document.querySelectorAll('.tag.tx-ok, .tag.tx-wait, .tag.tx-none, .tag.tx-other')].map(e => e.textContent).slice(0, 4).join(' / ')`));
+  '| confirm icons:', await ev(`[...${F}.document.querySelectorAll('.tx-ic')].map(e => e.getAttribute('aria-label')).slice(0, 4).join(' / ')`));
 console.log('traveling together:', await ev(`(() => { const g = ${F}.document.querySelector('.pgroup.together'); return g ? g.querySelector('.pgroup-h').innerText.replace(/\\s+/g, ' ') + ' | riders ' + g.querySelectorAll('.prow').length : 'none'; })()`));
 await call('setDispatcher', ['T. Tester']);
 console.log('color:', ok(await act('setTonightColor', ['#00ff00', 'A'])));

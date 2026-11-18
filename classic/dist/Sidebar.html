@@ -445,10 +445,9 @@
   .tag.ada { background: var(--red-bg); color: var(--red); }
   
   
-  .tag.tx-ok { background: var(--green-bg); color: var(--green-text); }
-  .tag.tx-wait { background: var(--break-bg); color: var(--break); }
-  .tag.tx-none { background: var(--amber-bg); color: var(--amber); }
-  .tag.tx-other { background: var(--fill); color: var(--label2); }
+  .tx-ic { flex: none; align-self: center; display: grid; place-items: center; margin-left: auto; color: var(--green-text); }
+  .tx-ic svg { width: 18px; height: 18px; }
+  .tx-ic + .more, .riders li .tx-ic + .more { margin-left: 4px; }
   .rsub .tag.ada, .sugg-main .tag.ada { background: var(--red); color: #fff; font-weight: 800; padding: 2px 8px; letter-spacing: .01em; }
   .prow.ada { background: color-mix(in srgb, var(--red) 13%, transparent); box-shadow: inset 5px 0 0 var(--red); }
   .prow.ada.sel { background: color-mix(in srgb, var(--red) 22%, var(--accent-bg)); }
@@ -806,6 +805,8 @@
 
   <div id="gmSetup" hidden></div>
   <div id="gmStrip" class="gm-strip" hidden></div>
+  <div id="rosterConflictModal" class="gm-modal" hidden></div>
+  <div id="rosterConflictNote"></div>
   <div id="status"></div>
   <div id="shiftNote"></div>
   <div id="alerts"></div>
@@ -1204,6 +1205,7 @@
     renderActive();
     renderLive();
     renderShiftChange();
+    renderRosterConflict();
     watchEmpties();
     autopilotSoon();
   }
@@ -1318,24 +1320,18 @@
 
   const justMoody = s => { const w = String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').split(/\s+/).filter(x => x && !['the', 'at', 'bldg', 'building', 'hall', 'please'].includes(x)); return w.length === 1 && w[0] === 'moody'; };
 
-  function txChip(r) {
+  function txIcon(r) {
     if (!r.txsCol) return '';
-    const minsSince = hm => { const m = /(\d{1,2}):(\d{2})\s*([AP]M)?/i.exec(String(hm || '')); if (!m) return null;
-      let h = +m[1]; if (m[3]) h = (h % 12) + (/pm/i.test(m[3]) ? 12 : 0);
-      const d = new Date(), diff = (d.getHours() * 60 + d.getMinutes() - (h * 60 + +m[2]) + 1440) % 1440; return diff < 720 ? diff : null; };
-    const c = String(r.txs || '').trim(), t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(c);
-    if (t) return `<span class="tag tx-ok" title="Confirmed by text at ${esc(t[0])}">✓ Confirmed ${esc(t[1])}</span>`;
-    if (r.driver || r.picked || !r.call || r.disp) return '';
-    const m = minsSince(r.call);
-    if (m == null) return '';
-    return m >= 10 ? `<span class="tag tx-none" title="Texted at ${esc(r.call)}, no YES yet: call them">! Not confirmed ${m}m</span>`
-      : `<span class="tag tx-wait" title="Texted at ${esc(r.call)}, waiting for their YES">Texted ${m < 1 ? 'just now' : m + 'm'}</span>`;
+    const t = /(\d{1,2}:\d{2})\s*([AP]M)?/i.exec(String(r.txs || '').trim());
+    if (!t) return '';
+    const tip = `Confirmed by text at ${esc(t[0].trim())}`;
+    return `<span class="tx-ic ok" role="img" aria-label="${tip}" title="${tip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3C6.5 3 3 6.6 3 11c0 2.2 1 4.2 2.6 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.5 0 9-3.6 9-8.2S17.5 3 12 3z"/><path d="M8.5 11.2l2.4 2.4 4.6-4.8" stroke-width="2.3"/></svg></span>`;
   }
   function rideBody(r, extra) {
     if (justMoody(r.pickup) || justMoody(r.dropoff)) extra = `<span class="tag posted" title="Just “Moody”: the Moody Center (arena) or DMC (Dealey Center)? Check with the rider">Moody: Center or DMC?</span>` + (extra || '');
     const zone = r.zone || r.loc || 'Off';
     return `<div class="rroute">${esc(r.pickup)}<span class="arrow">→</span>${esc(r.dropoff)}<span class="tag zone" title="Location (from the drop-off; unknown places count as Off)">${esc(zone)}</span></div>
-      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${txChip(r)}${extra || ''}</div>`;
+      <div class="rsub">${esc(r.first)}${r.time ? ` · ${esc(r.time)}` : ''}${r.ada ? '<span class="tag ada" title="ADA pickup: needs an ADA vehicle and a supervisor riding along">♿ ADA · supervisor</span>' : ''}${extra || ''}</div>`;
   }
   function pendingRow(r, counts, fresh) {
     return `
@@ -1349,7 +1345,7 @@
           ${r.dupOf ? `<div class="warn-line"><span class="tag dup" style="margin:0">possible duplicate of row ${r.dupOf.row} (${esc(r.dupOf.first)} ${esc(r.dupOf.time)})</span></div>` : ''}
           ${r.posted ? `<div class="warn-line"><span class="tag posted" style="margin:0">⚠ already posted ${esc(r.posted.t)} by ${esc(r.posted.by)}</span></div>` : ''}
         </div>
-        <button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button>
+        ${txIcon(r)}<button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button>
       </div>${menu(r, false)}`;
   }
 
@@ -1456,7 +1452,7 @@
         <div class="es">${b.status === 'available' ? `EMPTY${b.sinceMs ? ` ${mins(b.sinceMs)}m` : ''}` : esc(String(b.status).toUpperCase())}${cap ? ` · ${rides.length}/${cap} seats` : ''}${b.vehicle ? ' · ' + esc(b.vehicle) : ''}</div></div>
         ${rides.length ? `<div class="riders">${rides.map(r => `
           <div class="prow staged${r.ada ? ' ada' : ''}" ${vtn('s' + r.id)} draggable="true" ondragstart="dragStaged(event, ${js(r.id)})" ondragend="dragDone()" title="Drag back to Pending or to another crew">
-            <div class="pmain">${rideBody(r)}</div>
+            <div class="pmain">${rideBody(r)}</div>${txIcon(r)}
             <button class="more" title="Take out of this ride" onclick="event.stopPropagation(); unstageBtn(${js(r.id)})">✕</button></div>`).join('')}</div>
           <button class="primary ecrew-go" onclick="assignStaged(${js(b.key)})"${cap && rides.length > cap ? ' disabled' : ''}>${cap && rides.length > cap ? `Only ${cap} seats` : `Assign ${rides.length} ride${rides.length > 1 ? 's' : ''}`}</button>`
         : '<div class="ehint">Drag riders here</div>'}</div>`;
@@ -1937,6 +1933,122 @@
     openChat([`Last ride, then you're off at ${end}! Thank you!`].concat(splits).join('\n'), tags);
   }
 
+  let conflictDismissedForDate = '';
+
+  function renderRosterConflict() {
+    const rc = state && state.rosterConflict;
+    const note = $('rosterConflictNote');
+    const modal = $('rosterConflictModal');
+    if (!rc) {
+      if (note) note.innerHTML = '';
+      if (modal) modal.hidden = true;
+      return;
+    }
+
+    const curSource = rc.choice === 'active' ? rc.activeName : rc.tabName;
+    const isPrefSet = !!rc.choice;
+
+    if (note) {
+      note.innerHTML = `<div class="alert" style="background:var(--amber-bg);color:var(--amber);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;margin-bottom:8px">
+        <div style="font-size:13px">
+          <b>⚠️ Pairings conflict for tonight:</b> Using <b>${esc(curSource)}</b> tab ${isPrefSet ? '(saved choice)' : '(default)'}.
+        </div>
+        <button class="pill" style="cursor:pointer;background:var(--card);color:var(--text);border:1px solid var(--sep)" onclick="openConflictModal()">Review & Switch</button>
+      </div>`;
+    }
+
+    if (rc.needsChoice && conflictDismissedForDate !== rc.date) {
+      openConflictModal();
+    }
+  }
+
+  function openConflictModal() {
+    const rc = state && state.rosterConflict;
+    if (!rc) return;
+    const modal = $('rosterConflictModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add('gm-modal-open');
+
+    const renderShiftsList = shifts => {
+      if (!shifts || !shifts.length) return '<div class="muted">No shifts listed</div>';
+      return shifts.map(s => `
+        <div style="margin-bottom:6px">
+          <b style="color:var(--text)">${esc(s.name)}:</b>
+          ${s.crews.length ? `<ul style="margin:2px 0 0 16px;padding:0">${s.crews.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : '<span class="muted"> (0 crews)</span>'}
+        </div>
+      `).join('');
+    };
+
+    modal.innerHTML = `
+      <div class="gm-card" role="dialog" aria-modal="true" aria-labelledby="rcTitle" style="max-width:620px">
+        <button class="btn icon gm-x" aria-label="Close" onclick="closeConflictModal()">✕</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">⚠️</span>
+          <h2 id="rcTitle" style="margin:0;font-size:20px">Pairings Conflict Detected</h2>
+        </div>
+        <p class="gm-sub" style="margin-bottom:16px">Both the <b>${esc(rc.activeName)}</b> tab and <b>${esc(rc.tabName)}</b> tab define shift pairings for tonight (<b>${esc(rc.date)}</b>), but their crew assignments differ. Which roster should the panel use?</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+
+          <div style="border:${rc.choice === 'active' ? '2px solid var(--accent)' : '1px solid var(--sep)'};border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <b style="font-size:14.5px">${esc(rc.activeName)} Tab</b>
+              <span class="pill" style="font-size:11px">${rc.active.count} crews</span>
+            </div>
+            <div style="flex:1;font-size:12px;line-height:1.4;max-height:220px;overflow-y:auto;padding-right:4px">
+              ${renderShiftsList(rc.active.shifts)}
+            </div>
+            <button class="btn ${rc.choice === 'active' ? 'secondary' : 'primary'}" style="width:100%;margin-top:12px" onclick="chooseRosterSource('active')">
+              ${rc.choice === 'active' ? '✓ Using ' + esc(rc.activeName) : 'Use ' + esc(rc.activeName) + ' Tab'}
+            </button>
+          </div>
+
+          <div style="border:${rc.choice === 'pairings' ? '2px solid var(--accent)' : '1px solid var(--sep)'};border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <b style="font-size:14.5px">${esc(rc.tabName)} Tab</b>
+              <span class="pill" style="font-size:11px">${rc.tab.count} crews</span>
+            </div>
+            <div style="flex:1;font-size:12px;line-height:1.4;max-height:220px;overflow-y:auto;padding-right:4px">
+              ${renderShiftsList(rc.tab.shifts)}
+            </div>
+            <button class="btn ${rc.choice === 'pairings' ? 'secondary' : 'primary'}" style="width:100%;margin-top:12px" onclick="chooseRosterSource('pairings')">
+              ${rc.choice === 'pairings' ? '✓ Using ' + esc(rc.tabName) : 'Use ' + esc(rc.tabName) + ' Tab'}
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn text" onclick="closeConflictModal()">Dismiss for now</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function closeConflictModal() {
+    const rc = state && state.rosterConflict;
+    if (rc) conflictDismissedForDate = rc.date;
+    const modal = $('rosterConflictModal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('gm-modal-open');
+  }
+
+  function chooseRosterSource(source) {
+    const rc = state && state.rosterConflict;
+    const date = rc ? rc.date : '';
+    status('Switching roster source to ' + source + '...');
+    call('act', 'setRosterSource', [source, date]).then(res => {
+      closeConflictModal();
+      if (res && res.state) {
+        state = res.state;
+        render();
+      }
+      status('Now using ' + (source === 'active' ? (rc ? rc.activeName : 'active') : (rc ? rc.tabName : 'pairings')) + ' tab.');
+    }).catch(err => {
+      status('Failed to switch roster: ' + (err && err.message ? err.message : err), true);
+    });
+  }
+
   async function saveDispatcher(name) {
     await call('setDispatcher', name);
     state.dispatcher = name.trim(); state.dispatcherUsed = state.dispatcher || state.dispatcherUsed;
@@ -2049,7 +2161,7 @@
                   (r.lost ? `<span class="tag posted" title="The panel sent this ride out, but the sheet no longer shows it in progress">⚠ ${esc(r.lost)}</span>` : ''))}
                   ${r.lost === 'crew missing in sheet' ? `<button class="chatbtn" onclick="event.stopPropagation(); restoreRide(${js(refOf(r))})">Restore</button>` : ''}
                   ${r.lost ? `<button class="chatbtn" style="color:var(--red)" onclick="event.stopPropagation(); dismissLostRide(${js(refOf(r))})" title="Remove this ride from the dispatch panel">Remove</button>` : ''}</div>
-                <button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button></div>
+                ${txIcon(r)}<button class="more" title="More" onclick="event.stopPropagation(); toggleMenu(${r.row})">···</button></div>
               ${openMenus.has(r.row) ? `<div>${menu(r, true)}</div>` : ''}`; }).join('')}
             </div>${openThreads.has(gKey) ? `<div class="${appearIf('t' + gKey)}">${thread(gIds)}</div>` : ''}</div>`;
         }).join('')}
