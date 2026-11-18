@@ -12,7 +12,8 @@ function bigSet_() {}
  * Matching ignores case, punctuation, spaces, apostrophes, zip codes and filler words
  * ("the", "hall", "dorm", "residence", "apartments", "austin", "st"...), so only real
  * nickname/typo variants need listing. Keep look-alike places SEPARATE: e.g. San Jac Garage
- * is not San Jacinto, Littlefield Fountain/House are not Littlefield, Jester West is not Jester (Jester East is).
+ * is not San Jacinto, Littlefield Fountain/House are not Littlefield. Jester, Jester East and Jester West are one place
+ * (dispatch treats them as one pickup: "at jester" covers all three).
  */
 const FILE_VERSION_PLACES = '2026-11-07a';
 
@@ -20,8 +21,8 @@ const PLACES = {
   // Dorms
   'Jester':               ['jester', 'jester center', 'jester circle', 'jester east', 'jester e', 'east jester', 'jcl',
                           'j2', 'j2 dining', 'j2 dining hall', 'jester 2', 'jester j2', 'j1', 'j1 dining', 'j1 dining hall', // J1 / J2: Jester's dining halls
-                          'jeast', 'j east', 'j-east'],
-  'Jester West':          ['jwest', 'j west', 'j-west', 'jester west'],
+                          'jeast', 'j east', 'j-east',
+                          'jester west', 'jwest', 'j west', 'j-west', 'west jester', 'jester w'],
   'Kinsolving':           ['kins', 'kinsolving', 'kiins', 'kinsoving', 'kinsolvinfg'],
   'San Jacinto':          ['san jac', 'sanjac', 'san jacinto', 'sacjac', 'san jac dorms', 'san jacinto dorms', 'sjc', 'cypress cafe', 'cypress', 'cypress bend cafe'],
   'Moore-Hill':           ['moore hill', 'moorehill', 'morehill', 'more hill', 'moore'],
@@ -48,6 +49,8 @@ const PLACES = {
   'Target (Dobie)':       ['target', 'target (dobie)', 'target dobie', 'dobie target', 'target at dobie', 'the target', 'target on guad', 'target on guadalupe', 'ut target', 'target store'],
   'Dobie Twenty21':       ['dobie', 'dobie 21', 'dobie21', 'dobie twenty21', 'dobie twenty 21', 'dobie twenty one', 'dobie center'],
   'Castilian':            ['castilian', 'castillian', 'castillion'],
+  // The Otis Hotel (19th & San Antonio, West Campus): fine as a drop-off, never a pickup (NO_PICKUP_RE).
+  'The Otis Hotel':       ['otis hotel', 'the otis', 'otis', 'otis hotel austin', 'the otis austin'],
   '2400 Nueces':          ['2400 nueces', '2400 neuces', '2400 nucess', '2400 nuecues', '2400 nueces complex'],
   '26 West':              ['26 west', '26west'],
   'Legacy on Rio':        ['legacy on rio', 'legacy', 'legacy rio'],
@@ -67,9 +70,16 @@ const PLACES = {
   'The Sinclair':         ['sinclair', 'sinclaire', 'sinclair aps', 'sinclair 2710 nueces'],
   'Axis West':            ['axis west', 'axis west campus', 'axis west campus 2505 longview'],
   '24 Longview':          ['24 longview', '24longview'],
-  // 2616 Salado St = "Texan West Campus" / "The Texan" (riders also say "Texan 26"; a rider objected to that label).
-  'Texan West Campus':    ['texan west campus', 'texan west', 'texan wc', 'the texan', 'texan apartments', 'the texan west campus',
-                           'texan 26', 'texan26', '2616 salado', 'texan 26 2616 salado', 'texan 2616 salado'],
+  // Texan West Campus (2616 Salado St) and Texan 26 (1009 W 26th St) are two different West Campus apartments.
+  'Texan West Campus':    ['texan west campus', 'texan west', 'texan wc', 'the texan west campus', 'the texan west', 'the texan wc',
+                           'texan west campus apartments', '2616 salado', '2616 salado st', '2616 salado street', 'texan salado',
+                           'the texan on salado', 'the texan salado'],
+  'Texan 26':             ['texan 26', 'texan26', 'the texan 26', 'texan on 26th', 'texan on 26', 'texan 26th', 'the texan on 26th',
+                           'texan 26 apartments', '1009 w 26th', '1009 west 26th', '1009 w 26th st', '1009 west 26th st',
+                           '1009 w 26', '1009 26th', '1009 w 26th street', '1009 west 26th street'],
+  'Texan Pearl':          ['texan pearl', 'the texan pearl', 'texan pearl apartments', '2515 pearl', '2515 pearl st', '2515 pearl street'],
+  // Just "Texan" / "The Texan" could be Texan West Campus (2616 Salado) or Texan 26 (1009 W 26th):
+  'Texan (West Campus or 26?)': ['texan', 'the texan', 'texan apartments', 'the texan apartments', 'the texan apts', 'texan apts'],
   'Crest at Pearl':       ['crest at pearl'],
   'Union on 24th':        ['union on 24th', 'union on 24', 'union 24th', 'uniton 24th', 'union of 24'],
   'Union on San Antonio': ['union on san antonio', 'union san antonio'],
@@ -238,6 +248,7 @@ const ZONE_OF = {
   "texas union": 'On', "trg": 'On', "utc": 'On',
   // West
   "somerset condos": 'West', // dispatcher: Somerset condos is West Campus
+  "the otis hotel": 'West',  // outside the pickup area (see NO_PICKUP_RE); drop-offs there are West Campus
   "avon at 22nd": 'West',    // dispatcher: Avon at 22nd St is West Campus
   "phi gamma delta": 'West', // FIJI house, West Campus
   "stoneleigh condominiums": 'West', // 2409 Leon St (West every time in the sheet)
@@ -261,7 +272,8 @@ const ZONE_OF = {
   "regents west at 26th": 'West', "riograndecondominiums": 'West', "rise at west campus": 'West',
   "sangabrielsquare": 'West', "sanremo": 'West', "signature 1909": 'West', "skyloft": 'West', "sparq on rio": 'West',
   "standardat": 'West', "stoneleighcondominiumson2409leon": 'West', "taoscoop": 'West', "texan west campus": 'West',
-  "texanpearl": 'West', "the block on 23rd": 'West', "the block on 25th east": 'West',
+  "texan 26": 'West', "texan26": 'West', "texan (west campus or 26?)": 'West',
+  "texanpearl": 'West', "texan pearl": 'West', "the block on 23rd": 'West', "the block on 25th east": 'West',
   "the block on 25th west": 'West', "the block on 28th": 'West', "the block on leon": 'West', "the block on pearl": 'West', "the block on pearl north": 'West', "the block on pearl south": 'West',
   "the nine at rio": 'West', "the nine at west campus": 'West', "the rambler": 'West', "the sinclair": 'West',
   "the standard": 'West', "torre": 'West', "tradition on rio": 'West', "twenty two 15": 'West',
@@ -410,6 +422,11 @@ const PLACE_REWRITES = [
   { re: /^\s*(?:the\s+)?(?:ut\s+)?target(?:\s+(?:store|on\s+guad(?:alupe)?|at\s+guad(?:alupe)?|guad(?:alupe)?|dobie|at\s+dobie))?\s*[.!]*\s*$/i, to: 'Target (Dobie)' },
   { re: /^\s*(?:the\s+)?(?:alan\s+)?wright\s+(?:intramural\s+)?fields?\s*[.!]*\s*$|^\s*alan\s+wright\s*[.!]*\s*$/i, to: 'Whitaker Fields' }, // the name people know
   { re: /^\s*(?:durin|duran|durren|dureen)(?:\s+(?:hall|dorms?|residence hall))?\s*[.!]*\s*$/i, to: 'Duren' }, // misspellings of Duren
+  { re: /^\s*(?:the\s+)?texan\s*26(?:th)?(?:\s+apartments?|\s+apts?)?\s*[.!]*\s*$/i, to: 'Texan 26' },
+  { re: /^\s*(?:the\s+)?texan\s+(?:on\s+)?26(?:th)?\s*[.!]*\s*$/i, to: 'Texan 26' },
+  { re: /^\s*(?:the\s+)?texan\s+west(?:\s+campus)?(?:\s+apartments?|\s+apts?)?\s*[.!]*\s*$/i, to: 'Texan West Campus' },
+  { re: /^\s*(?:the\s+)?texan\s+wc\s*[.!]*\s*$/i, to: 'Texan West Campus' },
+  { re: /^\s*(?:the\s+)?texan(?:\s+apartments?|\s+apts?)?\s*[.!]*\s*$/i, to: 'Texan (West Campus or 26?)' },
 ];
 function placeRewrite_(text) {
   const t = String(text == null ? '' : text).trim(), w = PLACE_REWRITES.find(x => x.re.test(t));
@@ -422,15 +439,17 @@ function dropoffOnly_(text) {
   const t = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   return DROPOFF_ONLY.some(p => [p].concat(PLACES[p] || []).some(a => { const w = String(a).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); return w.length >= 5 && t.includes(' ' + w + ' '); }));
 }
+// Outside the pickup area whatever else the pickup names ("Otis hotel by Dobie", "the Otis near Jester").
+const NO_PICKUP_RE = /\botis\b/i; // The Otis Hotel
 function offCampusPickup_(pickup) {
   if (!String(pickup || '').trim()) return false;
-  if (dropoffOnly_(pickup)) return true;
+  if (dropoffOnly_(pickup) || NO_PICKUP_RE.test(String(pickup))) return true;
   return zoneOf_(pickup) !== 'On'; // only campus-map / known On places (or text naming one) are legal pickups
 }
 // "greg gym next to jester", "benches infront of pcl", "between fac and ut tower": the text names an On place.
 let CAMPUS_PHRASES_ = null;
 const SHORT_OK_ = new Set(['bsom', 'pcl', 'sac', 'sjc', 'j1', 'j2', 'ua9', 'fac', 'gdc', 'eer', 'wcp', 'sjh', 'rlm', 'pma', 'ecj', 'glt', 'kin', 'utc', 'mai', 'unb', 'cma', 'hrc', 'lbj',
-  'brg', 'ccg', 'ecg', 'gug', 'hcg', 'mag', 'rhg', 'sag', 'sjg', 'swg', 'trg', 'tsg', 'dhg', 'dkr']);
+  'brg', 'ccg', 'ecg', 'gug', 'hcg', 'mag', 'rhg', 'sag', 'sjg', 'swg', 'trg', 'tsg', 'dhg', 'dkr', 'ksc']);
 function mentionsCampusPlace_(text) {
   if (!CAMPUS_PHRASES_) {
     CAMPUS_PHRASES_ = [];
@@ -490,7 +509,8 @@ const CAMPUS_MAP = [
   ['LBJ', 'Lyndon B. Johnson Library', '', 'lbj library'], ['LCH', 'Littlefield Carriage House'], ['LDH', 'Longhorn Dining Facility'],
   ['LFH', 'Littlefield Home', 'Littlefield House'], ['LLA,LLB,LLC,LLD,LLE,LLF', 'Living Learning Centers', '', 'living learning center'],
   ['LTD', 'Littlefield Dormitory', 'Littlefield'], ['LTH', 'Laboratory Theatre Building'],
-  ['MAI', 'Main Building', '', 'ut tower', 'the tower', 'tower'], ['MBB', 'Moffett Molecular Biology Building'], ['MEZ', 'Mezes Hall', '', 'mezes'],
+  ['MAI', 'Main Building', '', 'ut tower', 'the tower', 'tower'],
+  ['', 'Main Mall', '', 'ut main mall', 'the main mall', 'tower main mall'], ['', 'South Mall', '', 'ut south mall', 'the south mall'], ['', 'West Mall', '', 'ut west mall', 'the west mall'], ['', 'East Mall', '', 'ut east mall', 'the east mall'], // the lawns around the Tower ['MBB', 'Moffett Molecular Biology Building'], ['MEZ', 'Mezes Hall', '', 'mezes'],
   ['MFH', 'Mithoff Track and Soccer Field House', '', 'mithoff track/soccer field house', 'mithoff track soccer field house', 'mithoff field house'], ['MHD', 'Moore-Hill Dormitory', 'Moore-Hill'],
   ['MMS', 'Mike A. Myers Track and Soccer Stadium', '', 'myers stadium'], ['MNC', 'Moncrief-Neuhaus Athletic Center'],
   ['MRH', 'Music Building and Recital Hall', 'Butler School of Music', 'music building'], ['MSB', 'Mail Services Building'], ['MTC', 'Material Transfers Center'],
@@ -544,6 +564,7 @@ const CAMPUS_MAP = [
   ['', 'Music Building and Recital Hall', 'Butler School of Music', 'bates recital hall', 'bates hall'], ['', 'Waggener Hall', '', 'wagner hall', 'waggener'],
   ['', 'Homer Rainey Hall', '', 'rainey hall'], ['', 'DKR-Texas Memorial Stadium', 'DKR Stadium', 'drk'],
   ['', 'Creekside Residence Hall', 'Creekside', 'waller creek', 'waller creek residence halls'], ['', 'Union Building', 'Texas Union', 'texas union on 24th', 'union on 24th st'],
+  ['KSC', 'Kendra Scott Center', '', 'kendra scott', 'kendra scott centre', 'the kendra scott center'], // on campus (user, 2026-11-11)
   // Parking garages
   ['BRG', 'Brazos Garage'], ['CCG', 'Conference Center Garage'], ['ECG', 'East Campus Garage'], ['GUG', 'Guadalupe Garage'],
   ['HCG', 'Health Center Garage'], ['MAG', 'Manor Garage'], ['RHG', 'Rowling Hall Garage'], ['SAG', 'San Antonio Garage'],
