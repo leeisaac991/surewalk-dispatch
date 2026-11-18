@@ -70,7 +70,9 @@ console.log('undo edit ->', ok(await act('undoAction', [ed.undo])), await names(
 // GroupMe: sign in, pick the chat, sync on
 const members = (await (await fetch(BASE + '/gm/groups/G1')).json()).response.members, idOf = n => (members.find(m => m.nickname === n) || {}).user_id;
 await post('/gm-crew', { user_id: idOf(crew.nav) || '12', name: crew.nav + ' T', text: 'good evening' }); // the chat has history before tonight's posts
-console.log('token:', JSON.stringify(await call('saveGroupMeToken', ['testtokentesttokentest1234'])), '| group:', ok(await act('setGroupMeGroup', ['G1', 'SURE Walk Dispatch'])), '| sync on:', ok(await act('setSyncRunning', [true])));
+const tokRes = await call('saveGroupMeToken', ['testtokentesttokentest1234']);
+console.log('token:', JSON.stringify(tokRes), '| group:', ok(await act('setGroupMeGroup', ['G1', 'SURE Walk Dispatch'])), '| sync on:', ok(await act('setSyncRunning', [true])));
+if (!tokRes || tokRes.dispatcher !== 'T. Dispatcher') { console.error('Expected dispatcher name updated from GroupMe, got:', tokRes); process.exit(1); }
 // the crew says "empty" in GroupMe, then gets a ride: they must show busy right away
 await post('/gm-crew', { user_id: idOf(crew.driver), name: crew.driver + ' T', text: 'empty' });
 await sleep(1500);
