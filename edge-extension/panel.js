@@ -536,6 +536,11 @@
       const r = await GM.check($('sGmToken').value);
       $('sGmToken').value = r.token;
       $('gmWho').textContent = 'Token OK — ' + r.name;
+      if (r.name) {
+        const gmParts = String(r.name).trim().split(/\s+/).filter(Boolean);
+        const formatted = gmParts.length > 1 ? `${gmParts[0][0].toUpperCase()}. ${gmParts[gmParts.length - 1]}` : (gmParts[0] || '');
+        if (formatted) $('sDispatcher').value = formatted;
+      }
       const gs = await GM.groups(), cur = $('sGmGroup').value || S.gmGroupId;
       $('sGmGroup').innerHTML = '<option value="">Choose the dispatch chat…</option>' + gs.map(g => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
       if (gs.some(g => g.id === cur)) $('sGmGroup').value = cur;

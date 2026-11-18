@@ -2349,6 +2349,12 @@
     if (!$('gmToken').value.trim()) return status('Paste your token first.', true);
     const me = await run('saveGroupMeToken', $('gmToken').value);
     $('gmToken').value = '';
+    if (me && me.dispatcher) {
+      state.dispatcher = me.dispatcher;
+      state.dispatcherUsed = me.dispatcher;
+      if ($('dispatcher')) $('dispatcher').value = me.dispatcher;
+      renderSelCount();
+    }
     status(`Token works — signed in to GroupMe as ${me.name}. Now load and pick the dispatch chat.`);
     await loadGroups();
   }
@@ -3539,7 +3545,13 @@ show();
     if (token.length < 20) { back(); gsu.err = 'That token looks incomplete. Try again.'; if (box) box.value = ''; return renderGmSetup(true); }
     gsu.busy = true; gsu.err = ''; renderGmSetup(true);
     try {
-      await run('saveGroupMeToken', token);
+      const me = await run('saveGroupMeToken', token);
+      if (me && me.dispatcher) {
+        state.dispatcher = me.dispatcher;
+        state.dispatcherUsed = me.dispatcher;
+        if ($('dispatcher')) $('dispatcher').value = me.dispatcher;
+        renderSelCount();
+      }
     } catch (e) {
       gsu.busy = false; back();
       gsu.err = 'That token looks incomplete. Try again.';

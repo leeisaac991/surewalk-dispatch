@@ -791,12 +791,24 @@ function saveGroupMeToken(raw) {
   const ids = JSON.parse(SP_().getProperty('DISPATCHER_GM_IDS') || '[]'), mine = String(me.user_id || me.id || '');
   if (mine && !ids.includes(mine)) SP_().setProperty('DISPATCHER_GM_IDS', JSON.stringify(ids.concat(mine).slice(-30)));
   SP_().deleteProperty('GM_ERROR');
-  return { name: me.name };
+  const gm = String(me.name || '').trim().split(/\s+/).filter(Boolean);
+  const formatted = gm.length > 1 ? `${gm[0][0].toUpperCase()}. ${gm[gm.length - 1]}` : (gm[0] || '');
+  if (formatted) userProps_().setProperty('dispatcher', formatted);
+  return { name: me.name, dispatcher: formatted };
 }
 
 function checkGroupMeToken() {
   if (!SP_().getProperty('GROUPME_TOKEN')) return { ok: false, missing: true };
-  try { gmFetch_('/users/me', {}); return { ok: true }; }
+  try {
+    const me = gmFetch_('/users/me', {});
+    if (me && me.name) {
+      SP_().setProperty('GROUPME_ME_NAME', String(me.name));
+      const gm = String(me.name).trim().split(/\s+/).filter(Boolean);
+      const formatted = gm.length > 1 ? `${gm[0][0].toUpperCase()}. ${gm[gm.length - 1]}` : (gm[0] || '');
+      if (formatted && !userProps_().getProperty('dispatcher')) userProps_().setProperty('dispatcher', formatted);
+    }
+    return { ok: true };
+  }
   catch (e) {
     if (/rejected/i.test(e.message || '')) { SP_().setProperty('GM_ERROR', 'GroupMe sync: ' + e.message); return { ok: false, rejected: true }; }
     return { ok: true, unknown: String(e.message || e) };
