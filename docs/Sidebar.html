@@ -513,6 +513,7 @@
   .lead-tag { font-size: 11px; color: var(--muted); margin-left: 2px; }
 
   
+  @media (max-width: 1100px) { .fb-label { display: none; } }
   .inbox { background: var(--card); border-radius: 12px; margin-top: 10px; overflow: hidden; box-shadow: var(--shadow); }
   .inbox-h { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 600; background: var(--amber-bg); }
   .inbox-h .link { margin-left: auto; }
@@ -711,6 +712,7 @@
     <button id="waitBtn" class="pill" onclick="togglePanel('waitPanel')" title="Average wait (Arrival − Call) of the last 5 rides"></button>
     <span class="spacer"></span>
     <button id="undoBtn" onclick="undoLast()" hidden>↶ Undo</button>
+    <button onclick="SWReports.open()" title="Report a bug, an idea, or a pickup / drop-off place we got wrong (sent to Isaac)" aria-label="Feedback">🐞<span class="fb-label"> Feedback</span></button>
     <button onclick="openSettings()" title="Settings: theme, color, mascot, GroupMe">⚙ Settings</button>
     <button onclick="refresh()" title="Refresh now">↻</button>
   </div>
@@ -991,6 +993,21 @@
 
   function status(text, err) { const s = $('status'); s.textContent = text; s.className = err ? 'err' : ''; }
   const PAGE_VERSION = '2026-11-07a';
+  window.addEventListener('load', () => window.SWReports && SWReports.init({ app: 'dispatch', version: () => PAGE_VERSION,
+    places: () => state ? [...new Set((state.pending || []).concat(state.active || []).flatMap(r => [r.pickup, r.dropoff]))] : [] }));
+
+  const reportedPlaces = new Set();
+  function placeBtns(place, role, from) {
+    const done = reportedPlaces.has(place + '|' + role) ? 'class="done" disabled' : '';
+    return ` <span class="swr-place-btns" onclick="event.stopPropagation()" title="Is the app right about this ${role}? Your answer goes to Isaac for the next update.">
+      <button ${done} onclick='reportPlace(${js(place)}, ${js(role)}, true, ${js(from)})'>✓ It's a valid ${role}</button>
+      <button ${done} onclick='reportPlace(${js(place)}, ${js(role)}, false, ${js(from)})'>✗ Right, not valid</button></span>`;
+  }
+  function reportPlace(place, role, ok, from) {
+    SWReports.quick(place, role + (ok ? '_ok' : '_bad'), from);
+    reportedPlaces.add(place + '|' + role);
+    document.querySelectorAll('.swr-place-btns button').forEach(b => { if ((b.getAttribute('onclick') || '').includes(JSON.stringify(place))) { b.disabled = true; b.classList.add('done'); } });
+  }
   function call(fn, ...args) {
     return new Promise((ok, fail) => {
       const runner = google.script.run.withSuccessHandler(ok).withFailureHandler(e => { status(e.message, true); fail(e); });
@@ -1341,7 +1358,7 @@
         <div class="pmain">
           ${rideBody(r, counts[routeKey(r)] > 1 ? `<span class="tag grp" title="Select all on this route"
               onclick="event.stopPropagation(); selectRoute(${js(routeKey(r))})">×${counts[routeKey(r)]} same route</span>` : '')}
-          ${r.offPickup ? `<div class="warn-line"><span class="tag dup" style="margin:0" title="We only pick up on campus">⚠ off-campus pickup — we only pick up on campus</span></div>` : ''}
+          ${r.offPickup ? `<div class="warn-line"><span class="tag dup" style="margin:0" title="We only pick up on campus">⚠ off-campus pickup — we only pick up on campus</span>${placeBtns(r.pickup, 'pickup', 'off-campus pickup warning')}</div>` : ''}
           ${r.dupOf ? `<div class="warn-line"><span class="tag dup" style="margin:0">possible duplicate of row ${r.dupOf.row} (${esc(r.dupOf.first)} ${esc(r.dupOf.time)})</span></div>` : ''}
           ${r.posted ? `<div class="warn-line"><span class="tag posted" style="margin:0">⚠ already posted ${esc(r.posted.t)} by ${esc(r.posted.by)}</span></div>` : ''}
         </div>
@@ -1370,9 +1387,11 @@
       if (g.together) {
         const ids = g.rides.map(r => r.id), on = ids.length === selected.size && ids.every(i => selected.has(i));
         const diff = k => new Set(g.rides.map(r => String(r[k] || '').toLowerCase().trim())).size > 1;
-        return `<div class="pgroup multi together" data-gkey="${esc(g.key)}" style="--gc:${TOGETHER_COLORS[g.together]}">
+        const edited = g.rides.some(r => Object.prototype.hasOwnProperty.call(tEdits, r.id));
+        return `<div class="pgroup multi together" data-gkey="${esc(g.key)}" style="--gc:${TOGETHER_COLORS[g.together]}"
+            ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropRider(event, ${js(g.key)})">
           <div class="pgroup-h"><span class="gnum">👥 Traveling together</span>
-            <span class="glabel">${g.rides.length} riders · said on the call${diff('pickup') ? ' · different pick-ups' : ''}${diff('dropoff') ? ' · different drop-offs' : ''}</span>
+            <span class="glabel">${g.rides.length} riders · ${edited ? 'changed by you' : 'said on the call'}${diff('pickup') ? ' · different pick-ups' : ''}${diff('dropoff') ? ' · different drop-offs' : ''}</span>
             <button class="${on ? 'on' : ''}" onclick="selectGroup(${js(ids)})">${on ? '✓ Selected' : `Select ${g.rides.length}`}</button></div>
           ${g.rides.map(r => pendingRow(r, counts, fresh)).join('')}
         </div>`;
@@ -1391,7 +1410,7 @@
     if (!state.pending.length) $('pending').innerHTML = '<div class="empty-note">No pending rides.</div>';
     const multi = currentPlan.filter(g => g.rides.length > 1), alone = currentPlan.length - multi.length;
     $('planSummary').innerHTML = state.pending.length ? `· ${currentPlan.length} ride${currentPlan.length === 1 ? '' : 's'}${alone ? ` (${alone} alone)` : ''}` +
-      (manualGroups.length ? ` <button class="link" onclick="resetGroups()">Reset groups</button>` : '') : '';
+      (manualGroups.length || Object.keys(tEdits).length ? ` <button class="link" onclick="resetGroups()">Reset groups</button>` : '') : '';
     seenPending = live;
     renderSuggest();
     watchAda();
@@ -1705,9 +1724,15 @@
   try { manualGroups = JSON.parse(localStorage.getItem('dispatchGroups') || '[]'); manualSeq = manualGroups.length; } catch (e) { manualGroups = []; }
   const saveManual = () => { try { localStorage.setItem('dispatchGroups', JSON.stringify(manualGroups)); } catch (e) {   } };
 
-  const togetherOf = r => (/\bGroup ([A-H])\b/.exec(String(r.txs || '')) || [])[1] || '';
+  let tEdits = {};
+  try { tEdits = JSON.parse(localStorage.getItem('dispatchTogether') || '{}') || {}; } catch (e) { tEdits = {}; }
+  const saveTEdits = () => { try { localStorage.setItem('dispatchTogether', JSON.stringify(tEdits)); } catch (e) {   } };
+  const sheetTogether = r => (/\bGroup ([A-H])\b/.exec(String(r.txs || '')) || [])[1] || '';
+  const togetherOf = r => (Object.prototype.hasOwnProperty.call(tEdits, r.id) ? tEdits[r.id] : sheetTogether(r));
   const TOGETHER_COLORS = { A: '#ff9500', B: '#af52de', C: '#34a853', D: '#007aff', E: '#e8467c', F: '#00a3a3', G: '#8d6e63', H: '#5c6bc0' };
   function planGroups() {
+    const pend = new Set(state.pending.map(r => r.id));
+    if (Object.keys(tEdits).some(id => !pend.has(id))) { Object.keys(tEdits).forEach(id => { if (!pend.has(id)) delete tEdits[id]; }); saveTEdits(); }
     const byLetter = {};
     state.pending.filter(r => !isStaged(r.id) && togetherOf(r)).forEach(r => { (byLetter[togetherOf(r)] = byLetter[togetherOf(r)] || []).push(r); });
     const together = Object.keys(byLetter).filter(L => byLetter[L].length > 1).sort()
@@ -1750,14 +1775,30 @@
     };
     const from = currentPlan.find(g => g.rides.some(r => r.id === id));
     if (!from || from.key === key) return;
-    const src = fixed(from); src.ids = src.ids.filter(i => i !== id);
+    if (from.together) tEdits[id] = '';
+    if (String(key).startsWith('g:')) {
+      tEdits[id] = key.slice(2);
+      manualGroups.forEach(g => { g.ids = g.ids.filter(i => i !== id); });
+      manualGroups = manualGroups.filter(g => g.ids.length);
+      saveTEdits(); saveManual(); morph(() => renderPending());
+      return;
+    }
+    saveTEdits();
+    if (!from.together) { const src = fixed(from); src.ids = src.ids.filter(i => i !== id); }
     if (key === 'new') manualGroups.push({ id: 'm' + (++manualSeq) + '-' + Date.now().toString(36), ids: [id] });
     else { const to = currentPlan.find(g => g.key === key); if (!to) return; fixed(to).ids.push(id); }
     manualGroups = manualGroups.filter(g => g.ids.length);
     saveManual();
     morph(() => renderPending());
   }
-  function resetGroups() { manualGroups = []; saveManual(); morph(() => renderPending()); status('Back to the automatic ride plan.'); }
+
+  function splitTogether(key) {
+    const g = currentPlan.find(x => x.key === key); if (!g) return;
+    g.rides.forEach(r => { tEdits[r.id] = ''; manualGroups.push({ id: 'm' + (++manualSeq) + '-' + Date.now().toString(36), ids: [r.id] }); });
+    saveTEdits(); saveManual(); morph(() => renderPending());
+    status(`Split up: ${g.rides.map(r => r.first).join(', ')} now ride separately.`);
+  }
+  function resetGroups() { manualGroups = []; saveManual(); tEdits = {}; saveTEdits(); morph(() => renderPending()); status('Back to the automatic ride plan.'); }
 
   function suggestGroups() { return currentPlan.filter(g => g.rides.length > 1).map(g => g.rides); }
 
@@ -1826,7 +1867,7 @@
   function moveMenu(r) {
     const here = currentPlan.find(g => g.rides.some(x => x.id === r.id));
     const opts = currentPlan.filter(g => g !== here && g.rides.length > 1)
-      .map(g => `<option value="${esc(g.key)}">Ride ${g.num} (${g.rides.map(x => esc(x.first)).join(', ')})</option>`).join('') +
+      .map(g => `<option value="${esc(g.key)}">${g.together ? '👥 Traveling together' : `Ride ${g.num}`} (${g.rides.map(x => esc(x.first)).join(', ')})</option>`).join('') +
       currentPlan.filter(g => g !== here && g.rides.length === 1).map(g => `<option value="${esc(g.key)}">Ride with ${esc(g.rides[0].first)}</option>`).join('');
     return `<select onchange="if (this.value) moveRider(${js(r.id)}, this.value)"><option value="">Move to…</option>${opts}${here && here.rides.length > 1 ? '<option value="new">Ride alone</option>' : ''}</select>`;
   }
@@ -1850,6 +1891,7 @@
       ${selected.size > 1 ? `<span class="muted" style="color:var(--red)">${selected.size} rides selected — select only one ride to cancel</span>` : ''}
       <button onclick="dup(${r.row})">Duplicate</button>
       ${!r.picked ? `<button onclick="editRide(${r.row})" title="Fix the rider's name, pick-up or drop-off in the sheet">✎ Edit ride</button>` : ''}
+      <button onclick='SWReports.open({ type: "place", places: ${js([r.pickup, r.dropoff].filter(Boolean))} })' title="Tell Isaac a pickup or drop-off place is judged wrong (on / off campus, valid or not)">📍 Report place</button>
       ${r.ada && !r.picked ? `<button onclick="notAda(${r.row})" title="They don't need ADA after all (we texted or called them): ADA becomes No in the sheet">♿ Not ADA</button>` : ''}
     </div>`;
   }
@@ -3930,5 +3972,196 @@ show();
     if (line) line.textContent = `Version: ${fmtBuild(firstBuild_)}` + (newer ? ` — a newer version (${fmtBuild(latestBuild_)}) is out, reload` : '');
   }
 </script>
+
+<style>
+  
+  .swr-bg { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.45); }
+  .swr-bg[hidden] { display: none; }
+  .swr { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--card); color: var(--text); border-radius: 14px; padding: 16px 18px; box-shadow: 0 10px 40px rgba(0,0,0,.35); font-size: 14px; }
+  .swr h3 { margin: 0 0 4px; font-size: 18px; } .swr .swr-sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  .swr-seg { display: flex; gap: 4px; background: var(--fill); border-radius: 9px; padding: 3px; margin-bottom: 10px; }
+  .swr-seg button { flex: 1; border: 0; border-radius: 7px; padding: 6px 4px; background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  .swr-seg button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .swr label { display: block; font-size: 12.5px; color: var(--label2); margin: 8px 0 3px; font-weight: 600; }
+  .swr input, .swr select, .swr textarea { width: 100%; box-sizing: border-box; font: inherit; color: var(--text); background: var(--card2); border: 1px solid var(--sep); border-radius: 8px; padding: 7px 9px; }
+  .swr textarea { min-height: 70px; resize: vertical; }
+  .swr-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .swr-row .swr-grow { flex: 1; }
+  .swr button.swr-btn { border: 0; border-radius: 9px; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer; background: var(--fill); color: var(--text); }
+  .swr button.swr-btn.pri { background: var(--accent); color: #fff; }
+  .swr button.swr-btn:disabled { opacity: .5; cursor: default; }
+  .swr-hr { border: 0; border-top: 1px solid var(--sep); margin: 16px 0 10px; }
+  .swr-list { margin: 6px 0 0; padding: 0; list-style: none; max-height: 160px; overflow: auto; }
+  .swr-list li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--sep); font-size: 13px; }
+  .swr-list li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .swr-list li button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
+  .swr-how { background: var(--fill); border-radius: 9px; padding: 8px 10px; font-size: 13px; margin-top: 8px; line-height: 1.45; }
+  .swr-copy { width: 100%; box-sizing: border-box; min-height: 90px; font-family: ui-monospace, monospace; font-size: 12px; margin-top: 6px; }
+  .swr-warn { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .swr-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 9001; background: var(--text); color: var(--card); padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  .swr-place-btns { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .swr-place-btns button { border: 0; border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--fill); color: var(--text); }
+  .swr-place-btns button.done { opacity: .55; cursor: default; }
+</style>
+<div id="swrSheet" class="swr-bg" hidden onclick="if (event.target === this) SWReports.close()">
+  <div class="swr" role="dialog" aria-modal="true" aria-labelledby="swrTitle">
+    <h3 id="swrTitle">🐞 Feedback &amp; reports</h3>
+    <div class="swr-sub">Saved on this computer only. Isaac reviews them and fixes things in the next update.</div>
+    <div class="swr-seg" id="swrSeg"></div>
+    <div id="swrPlaceBox">
+      <label for="swrPlace">Place (as the rider wrote it)</label>
+      <input id="swrPlace" list="swrPlaces" autocomplete="off" placeholder="e.g. Kerbey Lane on Guadalupe">
+      <datalist id="swrPlaces"></datalist>
+      <label for="swrVerdict">This place is…</label>
+      <select id="swrVerdict"></select>
+    </div>
+    <label for="swrNote" id="swrNoteLabel">What happened?</label>
+    <textarea id="swrNote" placeholder=""></textarea>
+    <div class="swr-warn">Don't paste rider text messages, names or phone numbers (phone numbers are removed automatically).</div>
+    <div class="swr-row"><span class="swr-grow" id="swrSaved"></span>
+      <button class="swr-btn" onclick="SWReports.close()">Close</button>
+      <button class="swr-btn pri" id="swrSave" onclick="SWReports.save()">Save report</button></div>
+    <hr class="swr-hr">
+    <div><b id="swrCount"></b></div>
+    <ul class="swr-list" id="swrList"></ul>
+    <div id="swrSend"></div>
+  </div>
+</div>
+<script>
+
+window.SWReports = (function () {
+  const KEY = 'sw_reports_v1', PART = 900;
+  const TYPES = [['bug', '🐞 Bug'], ['idea', '💡 Idea'], ['place', '📍 Place']];
+  const VERDICTS = [
+    ['pickup_ok', 'A valid pickup (on campus)'], ['pickup_bad', 'NOT a valid pickup'],
+    ['dropoff_ok', 'A valid drop-off (residence / apartment / campus building)'], ['dropoff_bad', 'NOT a valid drop-off'],
+    ['on', 'On campus'], ['off', 'Off campus'], ['west', 'West Campus'], ['other', 'Something else (say in the note)'],
+  ];
+  const VLABEL = Object.fromEntries(VERDICTS);
+  let cfg = { app: 'app', version: () => '', places: () => [] }, type = 'bug', mem = null, toastT = 0;
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  const scrub = s => String(s || '').replace(/(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, '[phone]').replace(/\d{7,}/g, '[number]').trim();
+
+  function load() {
+    if (mem) return mem;
+    try { mem = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { mem = []; }
+    if (!Array.isArray(mem)) mem = [];
+    return mem;
+  }
+  function store(list) {
+    mem = list;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch (e) { return false; }
+  }
+  function add(r) {
+    const list = load().slice();
+    list.push(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), app: cfg.app, ver: String(cfg.version() || '') }, r));
+    return store(list);
+  }
+  const when = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; };
+  function line(r, i) {
+    const what = r.type === 'place' ? `PLACE "${r.place}" = ${VLABEL[r.verdict] || r.verdict}${r.from ? ` (from: ${r.from})` : ''}` : r.type.toUpperCase();
+    return `#${i + 1} ${when(r.at)} · ${what}${r.note ? ' · ' + r.note : ''}`;
+  }
+
+  function parts() {
+    const list = load();
+    if (!list.length) return [];
+    const head = n => `SURE Walk reports · ${cfg.app} ${list[0].ver || ''} · part ${n}`;
+    const out = [];
+    let cur = [];
+    list.forEach((r, i) => {
+      let l = line(r, i);
+      if (l.length > PART - 60) l = l.slice(0, PART - 61) + '…';
+      if ((head(0) + '\n' + cur.concat(l).join('\n')).length > PART) { out.push(cur); cur = []; }
+      cur.push(l);
+    });
+    if (cur.length) out.push(cur);
+    return out.map((ls, k) => head(`${k + 1}/${out.length}`) + '\n' + ls.join('\n'));
+  }
+
+  function renderForm() {
+    $('swrSeg').innerHTML = TYPES.map(([k, l]) => `<button type="button" class="${k === type ? 'on' : ''}" onclick="SWReports.setType('${k}')">${l}</button>`).join('');
+    $('swrPlaceBox').hidden = type !== 'place';
+    $('swrNoteLabel').textContent = type === 'bug' ? 'What went wrong? What were you doing?' : type === 'idea' ? 'Your idea' : 'Anything else? (optional)';
+    $('swrNote').placeholder = type === 'bug' ? 'e.g. Pressed Assign and the ride stayed in Pending' : type === 'idea' ? 'e.g. Show the wait time bigger' : '';
+  }
+  function renderList() {
+    const list = load(), ps = parts();
+    $('swrCount').textContent = list.length ? `${list.length} report${list.length > 1 ? 's' : ''} waiting to send` : 'No reports waiting to send';
+    $('swrList').innerHTML = list.slice().reverse().map(r => `<li><span>${esc(line(r, list.indexOf(r)))}</span><button title="Delete this report" aria-label="Delete this report" onclick="SWReports.remove('${esc(r.id)}')">×</button></li>`).join('');
+    $('swrSend').innerHTML = list.length ? `<div class="swr-how"><b>To send them to Isaac:</b> press <b>Copy</b> below, open GroupMe, open your DM with <b>Isaac</b>, paste (Ctrl+V) and send.${ps.length > 1 ? ` There are ${ps.length} parts: copy and send each one.` : ''} Then press <b>Sent, clear them</b>.</div>
+      <div class="swr-row">${ps.map((p, k) => `<button class="swr-btn pri" onclick="SWReports.copy(${k}, this)">Copy${ps.length > 1 ? ` part ${k + 1} of ${ps.length}` : ''}</button>`).join('')}
+        <button class="swr-btn" onclick="SWReports.download()">Download file</button>
+        <span class="swr-grow"></span><button class="swr-btn" onclick="SWReports.clearSent()">Sent, clear them</button></div>
+      <textarea class="swr-copy" id="swrCopyBox" readonly hidden></textarea>` : '';
+  }
+  function toast(msg) {
+    let t = document.querySelector('.swr-toast');
+    if (!t) { t = document.createElement('div'); t.className = 'swr-toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+
+  return {
+    init(c) { cfg = Object.assign(cfg, c || {}); },
+    open(o) {
+      o = o || {};
+      type = o.type || 'bug';
+      $('swrVerdict').innerHTML = '<option value="">Choose…</option>' + VERDICTS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+      $('swrVerdict').value = o.verdict || '';
+      const names = [...new Set((o.places || []).concat(cfg.places() || []).filter(Boolean))].slice(0, 400);
+      $('swrPlaces').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+      $('swrPlace').value = o.place || (o.places && o.places.length === 1 ? o.places[0] : '');
+      $('swrNote').value = o.note || '';
+      $('swrSaved').textContent = '';
+      renderForm(); renderList();
+      $('swrSheet').hidden = false;
+      setTimeout(() => (type === 'place' && !$('swrPlace').value ? $('swrPlace') : $('swrNote')).focus(), 30);
+    },
+    close() { $('swrSheet').hidden = true; },
+    setType(t) { type = t; renderForm(); },
+    save() {
+      const note = scrub($('swrNote').value).slice(0, 700);
+      const r = { type, note };
+      if (type === 'place') {
+        r.place = scrub($('swrPlace').value).slice(0, 120); r.verdict = $('swrVerdict').value;
+        if (!r.place || !r.verdict) { $('swrSaved').textContent = 'Fill in the place and what it is.'; return; }
+      } else if (!note) { $('swrSaved').textContent = 'Write a few words first.'; return; }
+      const ok = add(r);
+      $('swrNote').value = ''; if (type === 'place') { $('swrPlace').value = ''; $('swrVerdict').value = ''; }
+      $('swrSaved').textContent = ok ? 'Saved ✓' : 'Saved for now (this browser can\'t keep it after closing: send it now).';
+      renderList();
+    },
+    quick(place, verdict, from, silent) {
+      const ok = add({ type: 'place', place: scrub(place).slice(0, 120), verdict, from: from || '', note: '' });
+      if (!silent) toast(ok ? `Reported: "${place}" = ${VLABEL[verdict] || verdict}. Send it from 🐞 Feedback.` : 'Report kept until this page closes: send it from 🐞 Feedback.');
+    },
+    remove(id) { store(load().filter(r => r.id !== id)); renderList(); },
+    clearSent() { store([]); renderList(); toast('Cleared. Thanks!'); },
+    async copy(k, btn) {
+      const text = parts()[k] || '';
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+      if (!ok) {
+        const box = $('swrCopyBox'); box.hidden = false; box.value = text; box.focus(); box.select();
+        try { ok = document.execCommand('copy'); } catch (e) {}
+      }
+      if (btn) btn.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C';
+    },
+    download() {
+      const text = parts().join('\n\n'), a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+      a.download = `surewalk-reports-${cfg.app}-${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    },
+    count: () => load().length,
+    _parts: parts, _scrub: scrub,
+  };
+})();
+</script>
+
 </body>
 </html>
