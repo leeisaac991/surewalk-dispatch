@@ -491,7 +491,12 @@
    * Script Lab can't pop out (Excel blocks it), so there the panel always shows in the side panel.
    */
   const canPop = () => !!(window.__SWC_HOSTED && window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync);
-  function home() { if (canPop() && !ls.get('inPane', false)) launcher(); else showInPane(); }
+  function home() {
+    if (canPop() && !ls.get('inPane', false)) {
+      launcher();
+      if (ls.get('repop', false)) { ls.set('repop', false); popOut(true); } // updated from the popped-out window: open it again
+    } else showInPane();
+  }
   function launcher() {
     document.body.style.margin = '0';
     document.body.innerHTML = `<style>
@@ -524,7 +529,7 @@
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-19 20:43:18'; // stamped by build.sh
+  const BUILT_AT = '2026-11-19 21:02:31'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
@@ -561,8 +566,11 @@
     document.body.innerHTML = `<div style="${barStyle}"><span>SURE Walk</span></div>
       <div style="padding:${BAR + 18}px 18px 18px;font:14px Segoe UI,system-ui,sans-serif;color:#333">
         <p style="margin:0 0 12px"><b>The panel is open in its own window.</b><br>Keep this side panel open: it's the window's connection to the sheet.</p>
-        <button id="swcBack" style="${btnStyle};border:1px solid #bf5700">Bring it back here</button></div>`;
+        <button id="swcBack" style="${btnStyle};border:1px solid #bf5700">Bring it back here</button>
+        <button id="swcRestart" style="${btnStyle};border:1px solid #bf5700;margin-left:6px" title="Restart the panel (reloads it with the newest version)">↻ Restart</button></div>`;
     document.getElementById('swcBack').onclick = back;
+    document.getElementById('swcRestart').onclick = () => { ls.set('repop', true); location.reload(); };
+    showUpdate();
   }
 
   /*
@@ -598,10 +606,10 @@
     if (!m) return;
     if (m.t === 'ready') dlgSend({ t: 'page', html: pageHtml() });
     else if (m.t === 'call') rpc(m.fn, m.args).then(r => dlgSend({ t: 'ret', id: m.id, ok: true, result: r }), e => dlgSend({ t: 'ret', id: m.id, ok: false, error: e.message || String(e) }));
-    else if (m.t === 'reload') location.reload();
+    else if (m.t === 'reload') { ls.set('repop', true); location.reload(); } // (Update in the window: it comes back by itself)
   }
   function bringBack() { try { if (dlg) dlg.close(); } catch (e) { /* already closed */ } setDialog(null); ls.set('inPane', true); showInPane(); }
-  function popOut() {
+  function popOut(auto) {
     const ui = window.Office && Office.context && Office.context.ui;
     if (!window.__SWC_HOSTED || !ui || !ui.displayDialogAsync) {
       note('<b>Pop out only works in the SURE Walk add-in, not in Script Lab.</b> Excel blocks new windows from Script Lab. ' +
@@ -610,6 +618,7 @@
     }
     ui.displayDialogAsync(new URL('dialog.html', location.href).href, { height: 85, width: 75, displayInIframe: false }, res => {
       if (res.status !== Office.AsyncResultStatus.Succeeded) {
+        if (auto === true) { note('<b>Updated.</b> Press <b>Pop out</b> to open the panel in its own window again.'); return; }
         note(`<b>Excel couldn't open the window</b> (${esc(res.error && res.error.message)}, code ${esc(res.error && res.error.code)}).`);
         return;
       }

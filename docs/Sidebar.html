@@ -712,6 +712,7 @@
     <button id="waitBtn" class="pill" onclick="togglePanel('waitPanel')" title="Average wait (Arrival − Call) of the last 5 rides"></button>
     <span class="spacer"></span>
     <button id="undoBtn" onclick="undoLast()" hidden>↶ Undo</button>
+    <button id="updBtn" hidden onclick="updatePopup(true)" title="A newer version of the panel is out: click to update" style="background:var(--accent);color:#fff;font-weight:700">⬆ Update</button>
     <button onclick="SWReports.open()" title="Report a bug, an idea, or a pickup / drop-off place we got wrong (sent to Isaac)" aria-label="Feedback">🐞<span class="fb-label"> Feedback</span></button>
     <button onclick="openSettings()" title="Settings: theme, color, mascot, GroupMe">⚙ Settings</button>
     <button onclick="refresh()" title="Refresh now">↻</button>
@@ -3976,8 +3977,31 @@ show();
     if (firstBuild_ === null) firstBuild_ = s.build;
     latestBuild_ = s.build;
     const newer = latestBuild_ !== firstBuild_;
-    if (newer) document.getElementById('newBuild').hidden = false;
+    if (newer) { document.getElementById('newBuild').hidden = false; document.getElementById('updBtn').hidden = false; updatePopup(false); }
     if (line) line.textContent = `Version: ${fmtBuild(firstBuild_)}` + (newer ? ` — a newer version (${fmtBuild(latestBuild_)}) is out, reload` : '');
+  }
+</script>
+<script>
+
+  function updatePopup(force) {
+    const key = 'swUpdAsked:' + latestBuild_;
+    if (!force) { try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch (e) {   } }
+    if (document.getElementById('updSheet')) return;
+    const bg = document.createElement('div');
+    bg.id = 'updSheet'; bg.className = 'swr-bg';
+    bg.innerHTML = `<div class="swr" role="dialog" aria-modal="true" aria-labelledby="updT">
+      <h3 id="updT">⬆ A new version is available</h3>
+      <div>The dispatch panel was updated${latestBuild_ && !/newer/.test(latestBuild_) ? ' (' + fmtBuild(latestBuild_) + ')' : ''}.</div>
+      <div class="swr-sub" style="margin-top:8px">Update now reloads the panel with the new version (a few seconds). Nothing in the sheet changes; your settings stay.</div>
+      <div class="swr-row"><span class="swr-grow"></span><button class="swr-btn" id="updLater">Later</button><button class="swr-btn pri" id="updGo">Update now</button></div></div>`;
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
+    document.getElementById('updLater').onclick = () => bg.remove();
+    document.getElementById('updGo').onclick = () => {
+      document.getElementById('updGo').textContent = 'Updating…';
+      const a = document.querySelector('#newBuild a');
+      if (a) a.click(); else location.reload();
+    };
   }
 </script>
 
