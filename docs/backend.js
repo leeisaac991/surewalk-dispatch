@@ -1924,8 +1924,11 @@ function chatEntry_(m, meId) {
   const e = { id: String(m.id), ts: m.created_at, who: m.name, text: text.slice(0, 200), me: ids.includes(String(m.user_id)) };
   const phones = (text.match(/\d[\d\s().-]{8,}\d/g) || []).map(s => s.replace(/\D/g, '').slice(-10)).filter(d => d.length === 10);
   const u = parseUpdate_(extractWhen_(text, (m.created_at || 0) * 1000).text);
+
+  const first = norm_(String(m.name || '').trim().split(/\s+/)[0]);
+  const onCrew = e.me && String(m.user_id) !== String(meId_() || '') && first.length >= 2 && CREW_NAMES_.has(first);
   if (phones.length) Object.assign(e, { kind: 'assign', phones });
-  else if (e.me) e.kind = 'mine';
+  else if (e.me && !onCrew) e.kind = 'mine';
   else if (m.sender_type !== 'user') e.kind = 'ack';
   else if (isCancelMsg_(text)) e.kind = 'cancel';
   else if (u) e.kind = u.kind === 'picked' && u.both ? 'atpicked' : u.kind;
