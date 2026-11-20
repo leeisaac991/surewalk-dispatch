@@ -712,6 +712,7 @@
     <button id="waitBtn" class="pill" onclick="togglePanel('waitPanel')" title="Average wait (Arrival − Call) of the last 5 rides"></button>
     <span class="spacer"></span>
     <button id="undoBtn" onclick="undoLast()" hidden>↶ Undo</button>
+    <button onclick="shiftSummaryOpen()" title="End of shift: tonight's numbers (rides, waits, form delay, texting), posted to the GroupMe chat" aria-label="Shift summary">📋<span class="fb-label"> Summary</span></button>
     <button id="updBtn" hidden onclick="updatePopup(true)" title="A newer version of the panel is out: click to update" style="background:var(--accent);color:#fff;font-weight:700">⬆ Update</button>
     <button onclick="SWReports.open()" title="Report a bug, an idea, or a pickup / drop-off place we got wrong (sent to Isaac)" aria-label="Feedback">🐞<span class="fb-label"> Feedback</span></button>
     <button onclick="openSettings()" title="Settings: theme, color, mascot, GroupMe">⚙ Settings</button>
@@ -1004,6 +1005,22 @@
         pending: (state.pending || []).length, active: (state.active || []).length, crews: (state.crews || []).length,
         chatInbox: ((state.chat || {}).inbox || []).length, statusErr: st && st.className === 'err' ? st.textContent : '' };
     } }));
+
+  async function shiftSummaryOpen() {
+    let r;
+    try { r = await call('shiftSummary'); } catch (e) { return; }
+    const gm = !!(state && state.groupme && state.groupme.enabled);
+    const asking = ask('📋 End-of-shift summary. Check it (you can edit it), then ' + (gm ? 'post it to the GroupMe chat.' : 'copy it.'), gm ? 'Post to GroupMe' : 'Copy', false,
+      `<textarea id="sumText" rows="10" maxlength="1000" style="width:100%;box-sizing:border-box;font:13.5px/1.45 inherit;margin-top:8px;resize:vertical">${esc(r.text)}</textarea>`);
+    const box0 = document.querySelector('#askSheet .ask'), w0 = box0 ? box0.style.width : '';
+    if (box0) box0.style.width = 'min(620px, 94vw)';
+    const ok = await asking;
+    if (box0) setTimeout(() => { box0.style.width = w0; }, 400);
+    const box = document.getElementById('sumText'), text = box ? box.value.trim() : r.text;
+    if (!ok || !text) return;
+    if (gm) { try { await call('postShiftSummary', text); status('📋 Shift summary posted to GroupMe.'); } catch (e) {   } return; }
+    try { await navigator.clipboard.writeText(text); status('📋 Summary copied: paste it in the GroupMe chat.'); } catch (e) { status('Copy the summary by hand (GroupMe isn\'t connected).', true); }
+  }
 
   const reportedPlaces = new Set();
   function placeBtns(place, role, from) {
@@ -2619,18 +2636,22 @@
 
   let morphBatch = null;
   function morph(update, fallback) {
-    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) {
       (fallback || update)();
       return Promise.resolve();
     }
     if (morphBatch) { morphBatch.fns.push(update); return morphBatch.done; }
-    const batch = morphBatch = { fns: [update] };
+    const batch = morphBatch = { fns: [update], ran: false };
+    const apply = () => { if (batch.ran) return; batch.ran = true; if (morphBatch === batch) morphBatch = null; batch.fns.forEach(f => f()); };
     const root = document.documentElement;
     root.classList.add('vt');
-    const t = document.startViewTransition(() => { morphBatch = null; batch.fns.forEach(f => f()); });
-    batch.done = t.updateCallbackDone.catch(() => {});
+    const t = document.startViewTransition(apply);
+
+    batch.done = Promise.race([t.updateCallbackDone.catch(() => {}), new Promise(r => setTimeout(r, 700))]).then(apply);
     t.ready.catch(() => {});
     t.finished.catch(() => {}).finally(() => { if (!morphBatch) root.classList.remove('vt'); });
+    setTimeout(() => { if (!morphBatch) root.classList.remove('vt'); }, 2000);
     return batch.done;
   }
   function settleWrap() {
@@ -3867,7 +3888,7 @@ show();
 </script>
 <style>
   
-  .dd-menu { position: fixed; z-index: 1000; background: var(--card); color: var(--text); border-radius: 12px; padding: 5px;
+  .dd-menu { position: fixed; z-index: 9600;  background: var(--card); color: var(--text); border-radius: 12px; padding: 5px;
              box-shadow: 0 12px 34px rgba(0,0,0,.28), 0 0 0 .5px var(--sep); max-height: 320px; overflow-y: auto;
              font-size: 14px; min-width: 150px; animation: dd-in .12s ease-out; }
   @keyframes dd-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }

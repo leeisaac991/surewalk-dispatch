@@ -519,7 +519,7 @@ const CAMPUS_MAP = [
   ['PAR', 'Parlin Hall', '', 'parlin'], ['PAT', 'J.T. Patterson Laboratories Building', '', 'patterson'], ['PCL', 'Perry-Castaneda Library', 'PCL'],
   ['PHD', 'Prather Hall Dormitory', 'Prather'], ['PHR', 'Pharmacy Building', '', 'pharmacy'], ['POB', "Peter O'Donnell Jr. Building", '', 'odonnell'],
   ['PPA', 'Hal C. Weaver Power Plant Annex'], ['PPE', 'Hal C. Weaver Power Plant Expansion'], ['PPL', 'Hal C. Weaver Power Plant'],
-  ['RHD', 'Roberts Hall Dormitory', 'Roberts'], ['RRH', 'Robert B. Rowling Hall', '', 'rowling', 'rowling hall'], ['RLM', 'Robert Lee Moore Hall'],
+  ['RHD', 'Roberts Hall Dormitory', 'Roberts'], ['RRH', 'Robert B. Rowling Hall', '', 'rowling', 'rowling hall'], ['RLM', 'Robert Lee Moore Hall', 'PMA', 'physics, math and astronomy', 'rlm hall'], // shown as "PMA" (user, 2026-11-19: its name now)
   ['RLP', 'Patton Hall'], ['RSC', 'Recreational Sports Center', 'Rec Center'],
   ['SAC', 'Student Activity Center', '', 'wcp', 'william c powers', 'powers student activity center', 'william c. powers jr. student activity center', 'william c powers jr student activity center'], ['SBS', 'Red and Charline McCombs Field'],
   ['SEA', 'Sarah M. and Charles E. Seay Building', '', 'seay'], ['SER', 'Service Building'], ['SJH', 'San Jacinto Residence Hall', 'San Jacinto'],

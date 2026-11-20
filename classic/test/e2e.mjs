@@ -82,6 +82,15 @@ console.log('after "empty": crew is', statusOf(st));
 const p3 = st.pending.find(x => x.row === RS), ref3 = { row: p3.row, id: p3.id };
 const a3 = await act('assignRides', [[ref3], crew, 'Auto', crew.van]);
 console.log('assign ' + RS + ' ->', typeof a3 === 'string' ? a3 : 'ok', await row(RS), '| crew is now', typeof a3 === 'string' ? '?' : statusOf(a3.state));
+{ // several riders onto a crew that already has a rider out: all of them assigned, one "Updated ride!" with every NEW line
+  const two = (typeof a3 === 'string' ? st : a3.state).pending.filter(x => ![RA, RC, RS].includes(x.row) && !x.ada).slice(-2);
+  const am = await act('assignRides', [two.map(x => ({ row: x.row, id: x.id })), crew, 'Auto', crew.van]);
+  const rowsNow = await Promise.all(two.map(x => row(x.row)));
+  const txt = typeof am === 'string' ? am : am.result;
+  console.log('multi assign ->', typeof am === 'string' ? am : 'ok', '| rows:', JSON.stringify(rowsNow));
+  console.log('multi assign ok:', typeof am !== 'string' && two.every(x => (am.state.active || []).some(r => r.id === x.id)) && /^Updated ride!/.test(txt) && two.every(x => txt.includes(x.first)), '| text:', JSON.stringify(txt));
+  if (typeof am !== 'string') console.log('multi assign undo ->', ok(await act('undoAction', [am.undo])));
+}
 const msg = typeof a3 === 'string' ? '' : a3.result;
 const sent = await call('sendGroupMe', [msg + '\n@' + crew.driver, [], null]);
 console.log('ride post sent:', typeof sent === 'string' ? sent : 'ok');
@@ -151,6 +160,11 @@ await sleep(1500);
 const hasBanner = await ev(`${F}.document.body.innerText.includes("phantom ride")`);
 const hasRemoveBtn = await ev(`Array.from(${F}.document.querySelectorAll("button")).some(b => b.textContent.trim() === "Remove")`);
 console.log('phantom ride UI shows banner:', hasBanner, '| remove button:', hasRemoveBtn);
+{ // 📋 end-of-shift summary: counts only, form delay from the panel's first-seen log; Pairings tab ignored
+  const sum = await call('shiftSummary', []);
+  console.log('shift summary:', JSON.stringify(sum && sum.text));
+  console.log('shift summary ok:', !!(sum && /SURE Walk shift summary/.test(sum.text) && /Rides: \d+ requested/.test(sum.text) && /Form delay/.test(sum.text) && sum.text.length <= 1000 && !/\d{10}/.test(sum.text)));
+}
 const dis = await act('dismissLostRide', [refLost]);
 console.log('dismiss phantom ride ->', ok(dis));
 await ev(`${F}.refresh(true)`);

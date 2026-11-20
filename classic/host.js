@@ -21,6 +21,7 @@
   const BACKEND_TIMEOUT_MS = 90000; // one call in the worker (GroupMe requests time out on their own after 20 s)
   const BATCH_ROWS = 100;   // rows per read (Excel on the web limits each answer to ~5 MB)
   const ROSTER_ROWS = 400;  // read at most this far below the last ride (the roster block)
+  const USE_PAIRINGS_TAB = false; // the separate "Pairings" tab is ignored: crews come from the month tab's roster block
 
   /* ---------------- this browser's settings and the panel's saved state ---------------- */
   const ls = {
@@ -218,10 +219,14 @@
           cells[p.r + i] = line;
         }
       }
-      // The shift roster: its own tab ("Pairings") when the workbook has one, else the block under the rides.
-      ctx.workbook.worksheets.load('items/name');
-      await ctx.sync();
-      const pt = ctx.workbook.worksheets.items.find(s => /pairi*ng/i.test(s.name) && s.name !== ws.name);
+      // The shift roster: only the block under the rides on the month tab (user, 2026-11-19: ignore the separate
+      // "Pairings" tab). USE_PAIRINGS_TAB = true reads that tab again (and Code.gs has the same switch).
+      let pt = null;
+      if (USE_PAIRINGS_TAB) {
+        ctx.workbook.worksheets.load('items/name');
+        await ctx.sync();
+        pt = ctx.workbook.worksheets.items.find(s => /pairi*ng/i.test(s.name) && s.name !== ws.name);
+      }
       let pairings = null, pairingsName = pt ? pt.name : 'Pairings';
       if (pt) {
         const pu = pt.getUsedRangeOrNullObject(true);

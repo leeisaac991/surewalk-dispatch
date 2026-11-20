@@ -598,7 +598,7 @@ const CAMPUS_MAP = [
   ['PAR', 'Parlin Hall', '', 'parlin'], ['PAT', 'J.T. Patterson Laboratories Building', '', 'patterson'], ['PCL', 'Perry-Castaneda Library', 'PCL'],
   ['PHD', 'Prather Hall Dormitory', 'Prather'], ['PHR', 'Pharmacy Building', '', 'pharmacy'], ['POB', "Peter O'Donnell Jr. Building", '', 'odonnell'],
   ['PPA', 'Hal C. Weaver Power Plant Annex'], ['PPE', 'Hal C. Weaver Power Plant Expansion'], ['PPL', 'Hal C. Weaver Power Plant'],
-  ['RHD', 'Roberts Hall Dormitory', 'Roberts'], ['RRH', 'Robert B. Rowling Hall', '', 'rowling', 'rowling hall'], ['RLM', 'Robert Lee Moore Hall'],
+  ['RHD', 'Roberts Hall Dormitory', 'Roberts'], ['RRH', 'Robert B. Rowling Hall', '', 'rowling', 'rowling hall'], ['RLM', 'Robert Lee Moore Hall', 'PMA', 'physics, math and astronomy', 'rlm hall'],
   ['RLP', 'Patton Hall'], ['RSC', 'Recreational Sports Center', 'Rec Center'],
   ['SAC', 'Student Activity Center', '', 'wcp', 'william c powers', 'powers student activity center', 'william c. powers jr. student activity center', 'william c powers jr student activity center'], ['SBS', 'Red and Charline McCombs Field'],
   ['SEA', 'Sarah M. and Charles E. Seay Building', '', 'seay'], ['SER', 'Service Building'], ['SJH', 'San Jacinto Residence Hall', 'San Jacinto'],
@@ -2628,6 +2628,7 @@ function setRosterSource(source, date) {
   return getState(true);
 }
 
+const USE_PAIRINGS_TAB = false;
 function parseRoster_(sh, lastRide) {
   ROSTER_CONFLICT_CACHE_ = null;
   const activeName = sh.getName();
@@ -2643,7 +2644,8 @@ function parseRoster_(sh, lastRide) {
 
   let tabRoster = null;
   let tabName = 'Pairings';
-  if (sh.s) {
+  if (!USE_PAIRINGS_TAB) {   }
+  else if (sh.s) {
     if (sh.s.pairings && sh.s.pairings.length) {
       tabName = sh.s.pairingsName || 'Pairings';
       tabRoster = parseRosterGrid_(sh.s.pairings.map(r => r.map(c => String(c).trim())));
@@ -2826,6 +2828,7 @@ function tonight_() {
   const night = nightKey_(new Date());
 
   const rides = [], pickedTonight = [], olderActive = [], colorCounts = { A: {}, B: {} }, prior = [], rowInfo = {}, waits = [], statusById = {};
+  const seenTs = [];
 
   vals.forEach((r, i) => {
     const ts = r[COL.TS - 1];
@@ -2836,6 +2839,7 @@ function tonight_() {
       nav: get(COL.NAV), pickup: get(COL.PICKUP), dropoff: get(COL.DROPOFF), reason: get(COL.REASON),
       tonight: nightKey_(ts) === night,
       state: hasReason_(get(COL.REASON)) || color.kind === 'black' ? 'cancelled' : color.kind === 'red' ? 'dup' : isPickedRow_(color, get(COL.ARRIVE)) ? 'picked' : 'open' };
+    if (nightKey_(ts) === night) seenTs.push([rid, ts.getTime()]);
     if (hasReason_(get(COL.REASON))) return;
     if (color.kind === 'black' || color.kind === 'red') return;
     if (isPickedRow_(color, get(COL.ARRIVE)) && nightKey_(ts) === night) {
@@ -2878,6 +2882,8 @@ function tonight_() {
     if (ts.getTime() >= editCutoff || (!ride.picked && nightKey_(ts) === night)) rides.push(ride);
     if (ride.picked && ride.driver && nightKey_(ts) === night) pickedTonight.push(ride);
   });
+
+  try { noteSeen_(night, seenTs); } catch (e) {   }
 
   const roster = roster_(sh);
   const rosterConflict = ROSTER_CACHE_ ? ROSTER_CACHE_.conflict : null;
@@ -3621,6 +3627,73 @@ function undoAction(t) {
 
 function getPanelUrl() {
   try { return typeof ScriptApp !== 'undefined' && ScriptApp.getService ? String(ScriptApp.getService().getUrl() || '') : ''; } catch (e) { return ''; }
+}
+
+const SEEN_MAX_MIN = 20, SEEN_GAP_MIN = 3;
+function noteSeen_(night, list) {
+  let log = bigGet_('SEEN_LOG');
+  if (!log || log.night !== night) log = { night, at: 0, seen: {} };
+
+  const now = Date.now(), backlog = !log.at || now - log.at > SEEN_GAP_MIN * 60e3;
+  let added = 0;
+  list.forEach(([id, ts]) => {
+    if (log.seen[id]) return;
+    log.seen[id] = [ts, now, !backlog && now - ts >= -60e3 && now - ts < SEEN_MAX_MIN * 60e3];
+    added++;
+  });
+  if (added || now - log.at > 60e3) { log.at = now; bigSet_('SEEN_LOG', log); }
+}
+
+function shiftSummary() {
+  const sh = sheet_(), last = lastRideRow_(sh), first = Math.max(2, last - CFG.SCAN_ROWS + 1), n = last - first + 1;
+  const range = sh.getRange(first, 1, n, CFG.LAST_COL), vals = range.getValues(), disp = range.getDisplayValues(), bgs = range.getBackgrounds();
+  let txs = null;
+  try { if (sh.getMaxColumns() >= COL.TXS && /^(confirmed|text)\b/i.test(String(sh.getRange(1, COL.TXS).getDisplayValue()).trim())) txs = sh.getRange(first, COL.TXS, n, 1).getDisplayValues(); } catch (e) {}
+  const night = nightKey_(new Date());
+  const log = bigGet_('SEEN_LOG');
+  const seen = log && log.night === night ? log.seen : {};
+  const s = { req: 0, picked: 0, cancelled: 0, dup: 0, open: 0, reasons: {}, waits: [], toArr: [], delays: [], yes: 0, groups: {}, grouped: 0, ada: 0, firstTs: 0, lastTs: 0 };
+  const hm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim()); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  vals.forEach((r, i) => {
+    const ts = r[COL.TS - 1];
+    if (!(ts instanceof Date) || nightKey_(ts) !== night) return;
+    const get = c => String(disp[i][c - 1]).trim(), color = rowColor_(bgs[i]), reason = get(COL.REASON);
+    s.req++; s.firstTs = s.firstTs ? Math.min(s.firstTs, ts.getTime()) : ts.getTime(); s.lastTs = Math.max(s.lastTs, ts.getTime());
+    if (/yes/i.test(get(COL.ADA))) s.ada++;
+    const sn = seen[rideId_(ts, get(COL.PHONE), get(COL.FIRST))];
+    if (sn && sn[2]) s.delays.push(Math.max(0, (sn[1] - sn[0]) / 60e3));
+    const tx = txs ? String(txs[i][0] || '') : '';
+    if (/^\s*\d{1,2}:\d{2}/.test(tx)) s.yes++;
+    const g = /\bGroup ([A-H])\b/.exec(tx); if (g) { s.groups[g[1]] = 1; s.grouped++; }
+    if (hasReason_(reason) || color.kind === 'black') { s.cancelled++; if (hasReason_(reason)) s.reasons[reason] = (s.reasons[reason] || 0) + 1; return; }
+    if (color.kind === 'red') { s.dup++; return; }
+    if (!isPickedRow_(color, get(COL.ARRIVE))) { s.open++; return; }
+    s.picked++;
+    const w = waitMinutes_(get(COL.CALL), get(COL.ARRIVE)); if (w != null) s.waits.push(w);
+    const a = hm(get(COL.ARRIVE)), q = Number(Utilities.formatDate(ts, CFG.TZ, 'H')) * 60 + Number(Utilities.formatDate(ts, CFG.TZ, 'm'));
+    if (a != null) { const d = (a - q + 1440) % 1440; if (d <= 180) s.toArr.push(d); }
+  });
+  const avg = l => l.reduce((x, y) => x + y, 0) / l.length, med = l => { const o = l.slice().sort((x, y) => x - y); return o[Math.floor((o.length - 1) / 2)]; };
+  const m1 = x => (Math.round(x * 10) / 10).toString().replace(/\.0$/, '');
+  const day = new Date(night + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const lines = [`📋 SURE Walk shift summary · ${day}` + (s.req ? ` (${fmtTime_(new Date(s.firstTs))}–${fmtTime_(new Date(s.lastTs))})` : '')];
+  if (!s.req) { lines.push('No rides tonight yet.'); return { text: lines.join('\n'), stats: s }; }
+  lines.push(`Rides: ${s.req} requested · ${s.picked} picked up · ${s.cancelled} cancelled · ${s.dup} duplicate${s.open ? ` · ${s.open} still open` : ''}${s.ada ? ` · ${s.ada} ADA` : ''}`);
+  const top = Object.keys(s.reasons).sort((a, b) => s.reasons[b] - s.reasons[a]).slice(0, 3);
+  if (top.length) lines.push('Cancelled: ' + top.map(k => `${k} ${s.reasons[k]}`).join(' · '));
+  if (s.waits.length) lines.push(`Wait (call → arrival): avg ${m1(avg(s.waits))} min · median ${m1(med(s.waits))} min`);
+  if (s.toArr.length) lines.push(`Request → arrival: avg ${m1(avg(s.toArr))} min`);
+  lines.push(s.delays.length ? `Form delay (submitted → on the sheet): avg ${m1(avg(s.delays))} min · median ${m1(med(s.delays))} min · max ${m1(Math.max(...s.delays))} min (${s.delays.length} rides timed)`
+    : 'Form delay: not measured (the panel wasn\'t open while rides came in)');
+  if (txs) lines.push(`Texting: ${s.yes} confirmed by text (YES)` + (s.grouped ? ` · ${s.grouped} riders in ${Object.keys(s.groups).length} group${Object.keys(s.groups).length > 1 ? 's' : ''}` : ''));
+  let text = lines.join('\n');
+  if (text.length > 1000) text = text.slice(0, 997) + '…';
+  return { text, stats: { req: s.req, picked: s.picked, cancelled: s.cancelled, delays: s.delays.length } };
+}
+
+function postShiftSummary(text) {
+  if (!SP_().getProperty('GROUPME_TOKEN')) throw new Error('Connect GroupMe first (⚙ Settings ▸ GroupMe).');
+  return postMessage_(String(text || '').slice(0, 1000), [], null);
 }
 
 ;
