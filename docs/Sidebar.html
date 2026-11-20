@@ -994,7 +994,15 @@
   function status(text, err) { const s = $('status'); s.textContent = text; s.className = err ? 'err' : ''; }
   const PAGE_VERSION = '2026-11-07a';
   window.addEventListener('load', () => window.SWReports && SWReports.init({ app: 'dispatch', version: () => PAGE_VERSION,
-    places: () => state ? [...new Set((state.pending || []).concat(state.active || []).flatMap(r => [r.pickup, r.dropoff]))] : [] }));
+    places: () => state ? [...new Set((state.pending || []).concat(state.active || []).flatMap(r => [r.pickup, r.dropoff]))] : [],
+    diag: () => {
+      if (!state) return { state: 'not loaded yet' };
+      const g = state.groupme || {}, st = $('status');
+      return { build: typeof BUILD_ID !== 'undefined' ? BUILD_ID : '', host: typeof SWC_HOST !== 'undefined' ? 'excel' : 'web',
+        gm: g.enabled ? 'connected' : 'not connected', sync: g.running ? 'on' : 'off', autopilot: g.autopilot ? 'on' : 'off', gmError: g.error || '',
+        pending: (state.pending || []).length, active: (state.active || []).length, crews: (state.crews || []).length,
+        chatInbox: ((state.chat || {}).inbox || []).length, statusErr: st && st.className === 'err' ? st.textContent : '' };
+    } }));
 
   const reportedPlaces = new Set();
   function placeBtns(place, role, from) {
@@ -1010,7 +1018,7 @@
   }
   function call(fn, ...args) {
     return new Promise((ok, fail) => {
-      const runner = google.script.run.withSuccessHandler(ok).withFailureHandler(e => { status(e.message, true); fail(e); });
+      const runner = google.script.run.withSuccessHandler(ok).withFailureHandler(e => { status(e.message, true); if (window.SWReports) SWReports.noteError(fn + ': ' + e.message); fail(e); });
       if (typeof runner[fn] !== 'function') {
         const e = new Error(`The server code is out of date ("${fn}" is missing). Re-paste ALL .gs files from apps-script/, then Deploy → Manage deployments → Edit → New version.`);
         status(e.message, true);
@@ -4017,7 +4025,8 @@ show();
     </div>
     <label for="swrNote" id="swrNoteLabel">What happened?</label>
     <textarea id="swrNote" placeholder=""></textarea>
-    <div class="swr-warn">Don't paste rider text messages, names or phone numbers (phone numbers are removed automatically).</div>
+    <div class="swr-warn">Don't paste rider text messages, names or phone numbers (phone numbers are removed automatically).
+      Bugs and ideas also carry a 🩺 snapshot of the app (version, connection, counts, recent errors), never rider info.</div>
     <div class="swr-row"><span class="swr-grow" id="swrSaved"></span>
       <button class="swr-btn" onclick="SWReports.close()">Close</button>
       <button class="swr-btn pri" id="swrSave" onclick="SWReports.save()">Save report</button></div>
@@ -4038,7 +4047,33 @@ window.SWReports = (function () {
     ['on', 'On campus'], ['off', 'Off campus'], ['west', 'West Campus'], ['other', 'Something else (say in the note)'],
   ];
   const VLABEL = Object.fromEntries(VERDICTS);
-  let cfg = { app: 'app', version: () => '', places: () => [] }, type = 'bug', mem = null, toastT = 0;
+  let cfg = { app: 'app', version: () => '', places: () => [], diag: () => ({}) }, type = 'bug', mem = null, toastT = 0, inited = false;
+
+  const errs = [];
+  function noteError(msg) {
+    const s = String(msg && msg.message || msg || '').replace(/\s+/g, ' ').trim();
+    if (!s) return;
+    const last = errs[errs.length - 1];
+    if (last && last.m === s) { last.n++; last.t = Date.now(); return; }
+    errs.push({ t: Date.now(), m: s.slice(0, 160), n: 1 });
+    if (errs.length > 8) errs.shift();
+  }
+  window.addEventListener('error', e => noteError((e.message || 'error') + (e.lineno ? ` @${e.lineno}:${e.colno}` : '')));
+  window.addEventListener('unhandledrejection', e => noteError('promise: ' + (e.reason && e.reason.message || e.reason)));
+  try { const ce = console.error.bind(console); console.error = (...a) => { try { noteError(a.map(x => x && x.message || String(x)).join(' ')); } catch (e) {} ce(...a); }; } catch (e) {}
+  const clock = t => { const d = new Date(t); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const browser = () => { const u = navigator.userAgent, m = /(Edg|Chrome|Firefox|Version)\/(\d+)/.exec(u); return m ? (m[1] === 'Version' ? 'Safari' : m[1] === 'Edg' ? 'Edge' : m[1]) + ' ' + m[2] : ''; };
+
+  function snapshot() {
+    let app = {};
+    try { app = inited ? (cfg.diag() || {}) : { started: 'NO (the app never finished loading)' }; } catch (e) { app = { diagError: e.message }; }
+    const s = Object.assign({ ver: String(cfg.version() || ''), online: navigator.onLine, view: `${innerWidth}x${innerHeight}`, browser: browser() }, app);
+    Object.keys(s).forEach(k => { if (s[k] === '' || s[k] == null) delete s[k]; else if (typeof s[k] === 'string') s[k] = scrub(s[k]).slice(0, 120); });
+    s.errors = errs.map(e => `${clock(e.t)} ${scrub(e.m)}${e.n > 1 ? ' ×' + e.n : ''}`);
+    return s;
+  }
+  const diagText = d => d ? Object.keys(d).filter(k => k !== 'errors').map(k => `${k}=${d[k]}`).join(', ') +
+    (d.errors && d.errors.length ? ` | errors: ${d.errors.join(' / ')}` : ' | no errors') : '';
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -4057,13 +4092,14 @@ window.SWReports = (function () {
   }
   function add(r) {
     const list = load().slice();
-    list.push(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), app: cfg.app, ver: String(cfg.version() || '') }, r));
+    list.push(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), app: cfg.app, ver: String(cfg.version() || '') },
+      r.type === 'place' ? {} : { diag: snapshot() }, r));
     return store(list);
   }
   const when = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`; };
   function line(r, i) {
     const what = r.type === 'place' ? `PLACE "${r.place}" = ${VLABEL[r.verdict] || r.verdict}${r.from ? ` (from: ${r.from})` : ''}` : r.type.toUpperCase();
-    return `#${i + 1} ${when(r.at)} · ${what}${r.note ? ' · ' + r.note : ''}`;
+    return `#${i + 1} ${when(r.at)} · ${what}${r.note ? ' · ' + r.note : ''}${r.diag ? '\n   🩺 ' + diagText(r.diag) : ''}`;
   }
 
   function parts() {
@@ -4106,7 +4142,9 @@ window.SWReports = (function () {
   }
 
   return {
-    init(c) { cfg = Object.assign(cfg, c || {}); },
+    init(c) { cfg = Object.assign(cfg, c || {}); inited = true; },
+    noteError,
+    snapshot,
     open(o) {
       o = o || {};
       type = o.type || 'bug';
