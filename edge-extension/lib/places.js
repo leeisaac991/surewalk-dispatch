@@ -126,7 +126,7 @@ const PLACES = {
   'Rec Center':           ['rec', 'rec center', 'recsports', 'rec sports', 'ut rec center'],
   'Texas Union':          ['union', 'texas union'],
   'Butler School of Music': ['butler', 'butler school of music', 'butler school music', 'butler music', 'bsom', 'b.s.o.m', 'butler som', 'school of music'],
-  'Moody CMA':            ['cma', 'moody cma'],
+  'CMA':                  ['cma', 'moody cma'], // shown as just "CMA" (user, 2026-11-19)
   // Just "Moody" could be the Moody Center (arena) or DMC (Dealey Center, Moody College): never guessed — flagged.
   'Moody (Center or DMC?)': ['moody'],
   'Winship':              ['winship', 'winship drama'],
@@ -242,7 +242,7 @@ const ZONE_OF = {
   "dmc": 'On', "dobie twenty21": 'On', "target (dobie)": 'On', "duren": 'On', "ecg": 'On', "ecga": 'On', "eer": 'On', "etc": 'On',
   "gregory gym": 'On', "hcg": 'On', "health center garage": 'On', "jester": 'On',
   "jester west": 'On', "kinsolving": 'On', "littlefield": 'On', "lot118": 'On', "lot37": 'On', "manor garage": 'On',
-  "mccombs": 'On', "moody cma": 'On', "moody (center or dmc?)": 'On', "moore-hill": 'On', "pcl": 'On', "prather": 'On', "rec center": 'On',
+  "mccombs": 'On', "cma": 'On', "moody (center or dmc?)": 'On', "moore-hill": 'On', "pcl": 'On', "prather": 'On', "rec center": 'On',
   "roberts": 'On', "rowling": 'On', "sag": 'On', "san jacinto": 'On', "san jacinto garage": 'On', "guadalupe garage": 'On', "scottish rite dormitory": 'On', "sunchase condos": 'Off', "whitaker fields": 'Off', "21 rio": 'West', "orange tree condos": 'West', "st thomas condos": 'West', "overlook condos": 'West', "lenox condos": 'West',
   "lonestar lofts": 'West', "miller square": 'Off', "2001comal": 'On', "2105comal": 'On', "smc": 'On',
   "texas union": 'On', "trg": 'On', "utc": 'On',
