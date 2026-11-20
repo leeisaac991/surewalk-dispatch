@@ -99,8 +99,10 @@
     if (!L.composite) { const t = c[L.ts - 1]; return textToWall(t.t) || (typeof t.v === 'number' && isDateFmt(t.fmt) ? serialToWall(t.v) : null); }
     const d = c[L.date - 1], t = c[L.time - 1];
     let day = null, hms = null, m;
-    if (typeof d.v === 'number' && d.v > 1000) day = serialToWall(d.v).slice(0, 10);
-    else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(d.t).trim()))) day = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[1])}-${pad(m[2])}`;
+    if (typeof d.v === 'number' && d.v > 1000) {
+      day = serialToWall(d.v).slice(0, 10);
+      if (d.v % 1 > 0.00001) hms = serialToWall(d.v).slice(11, 19);
+    } else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(d.t).trim()))) day = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[1])}-${pad(m[2])}`;
     if (typeof t.v === 'number' && t.v < 1) hms = serialToWall(t.v).slice(11, 19);
     else if ((m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i.exec(String(t.t).trim()))) {
       const h = m[4] ? (+m[1] % 12) + (/pm/i.test(m[4]) ? 12 : 0) : +m[1];
@@ -548,7 +550,7 @@
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-19 22:01:40'; // stamped by build.sh
+  const BUILT_AT = '2026-11-19 22:16:27'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
