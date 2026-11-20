@@ -2499,26 +2499,77 @@ function vehicleName_(label) {
 }
 
 function rosterDateKey_(s) {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(s).trim());
-  if (!m) return null;
-  const y = m[3].length === 2 ? '20' + m[3] : m[3];
-  return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  if (s == null) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+
+  let m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})(?:\s+.*)?$/.exec(str);
+  if (m) {
+    const y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  }
+
+  m = /^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})(?:[\sT].*)?$/.exec(str);
+  if (m) {
+    return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  }
+  return null;
 }
 
 function parseRosterGrid_(v) {
   if (!v || !v.length) return null;
-  const starts = v.map((r, i) => (rosterDateKey_(r[0]) ? i : -1)).filter(i => i >= 0);
-  if (!starts.length) return null;
-  const night = nightKey_(new Date());
 
-  const dated = starts.map(i => ({ i, d: rosterDateKey_(v[i][0]) }));
-  const pastOrToday = dated.filter(x => x.d <= night).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i));
-  const si = (dated.find(x => x.d === night) || pastOrToday[pastOrToday.length - 1] || dated[dated.length - 1]).i;
-  const block = v.slice(si, starts.find(i => i > si) ?? v.length);
+  const dateEntries = [];
+  v.forEach((r, i) => {
+    for (let c = 0; c < r.length; c++) {
+      const d = rosterDateKey_(r[c]);
+      if (d) {
+        dateEntries.push({ i, c, d });
+        break;
+      }
+    }
+  });
+
+  const night = nightKey_(new Date());
+  let si = -1, anchorCol = 0, dateKey = null, nextSi = v.length;
+
+  if (dateEntries.length > 0) {
+
+    const pastOrToday = dateEntries.filter(x => x.d <= night).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i));
+    const chosen = (dateEntries.find(x => x.d === night) || pastOrToday[pastOrToday.length - 1] || dateEntries[dateEntries.length - 1]);
+    si = chosen.i;
+    anchorCol = chosen.c;
+    dateKey = chosen.d;
+    const nextEntry = dateEntries.find(x => x.i > si);
+    if (nextEntry) nextSi = nextEntry.i;
+  } else {
+
+    const hdrIdx = v.findIndex(r => r.some(c => /^driver$/i.test(c)));
+    if (hdrIdx < 0) return null;
+    si = Math.max(0, hdrIdx - 4);
+    dateKey = night;
+    for (let r = si; r <= Math.min(v.length - 1, hdrIdx + 4); r++) {
+      const c = v[r].findIndex(cell => /driver|dispatcher|pacifica|voyager|sienna|cart|gem|floater/i.test(cell));
+      if (c >= 0) { anchorCol = c; break; }
+    }
+  }
+
+  const blockRaw = v.slice(si, nextSi);
+
+  let tableCol = anchorCol;
+  for (let c = 0; c < (blockRaw[0] || []).length; c++) {
+    if (blockRaw.some(r => /pacifica|voyager|sienna|cart|gem|floater|van\b/i.test(r[c] || ''))) {
+      tableCol = c;
+      break;
+    }
+  }
+
+  const block = blockRaw.map(r => r.slice(tableCol));
 
   const hdr = block.findIndex(r => r.some(c => /^driver$/i.test(c)));
   if (hdr < 0) return null;
   const driverCols = block[hdr].map((c, j) => (/^driver$/i.test(c) ? j : -1)).filter(j => j >= 0);
+  if (!driverCols.length) return null;
 
   const labels = block.slice(0, hdr).reverse().find(r => r.some(c => /\bphone\b/i.test(c))) || [];
   const shifts = driverCols.map((dc, n) => ({
@@ -2531,7 +2582,7 @@ function parseRosterGrid_(v) {
   }));
 
   block.forEach((r, i) => {
-    if (i !== hdr && /dispatcher/i.test(r[0] || ''))
+    if (i !== hdr && (/dispatcher/i.test(r[0] || '') || (blockRaw[i] && /dispatcher/i.test(blockRaw[i][0] || ''))))
       driverCols.forEach((dc, n) => [r[dc], r[dc + 1]].filter(x => /^[a-z][a-z .'-]*$/i.test(x || '')).forEach(x => shifts[n].dispatchers.push(x)));
   });
   block.slice(hdr + 1).forEach(r => {
@@ -2557,7 +2608,7 @@ function parseRosterGrid_(v) {
     });
   });
   markMidMoves_(shifts);
-  return { date: rosterDateKey_(block[0][0]), shifts };
+  return { date: dateKey || rosterDateKey_(block[0][0]) || night, shifts };
 }
 
 function summarizeRoster_(roster, sourceName) {
@@ -2638,6 +2689,14 @@ function parseRoster_(sh, lastRide) {
   if (lastRow > lastRide) {
     const width = Math.min(sh.getLastColumn(), 26);
     const v = sh.getRange(lastRide + 1, 1, lastRow - lastRide, width).getDisplayValues()
+      .map(r => r.map(c => String(c).trim()));
+    activeRoster = parseRosterGrid_(v);
+  }
+
+  if (!activeRoster && lastRow > 1) {
+    const startRow = Math.max(2, lastRow - 500);
+    const width = Math.min(sh.getLastColumn(), 26);
+    const v = sh.getRange(startRow, 1, lastRow - startRow + 1, width).getDisplayValues()
       .map(r => r.map(c => String(c).trim()));
     activeRoster = parseRosterGrid_(v);
   }

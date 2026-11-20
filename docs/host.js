@@ -111,8 +111,8 @@
   // "2026-11-11 23:51:00" -> "11/11/2026 23:51:00", how the original code expects a timestamp to read
   const wallText = w => `${+w.slice(5, 7)}/${+w.slice(8, 10)}/${w.slice(0, 4)} ${+w.slice(11, 13)}:${w.slice(14, 16)}:${w.slice(17, 19)}`;
   // Excel column for an old-layout column on a given row: ride rows use the header map; the roster block below
-  // the rides is the old block shifted to start in the timestamp column.
-  const xcolOf = (L, row, k) => (row <= L.lastRide ? L.map[k] : k + L.ts - 1);
+  // the rides uses direct column mapping (Col 1 = Col A, Col 2 = Col B, etc.).
+  const xcolOf = (L, row, k) => (row <= L.lastRide ? L.map[k] : k);
 
   /* ---------------- reading the workbook ---------------- */
   let conf = { sheet: ls.get('sheet', '') };
@@ -195,12 +195,26 @@
       await ctx.sync();
       const probe = probeOf(lastRow, tsCol.text);
       L.lastRide = 1;
-      for (let i = tsCol.text.length - 1; i >= 0; i--) if (aTop + i > 1 && /\d{1,2}:\d{2}/.test(tsCol.text[i][0])) { L.lastRide = aTop + i; break; }
+      for (let i = tsCol.text.length - 1; i >= 0; i--) {
+        const val = String(tsCol.text[i][0] || '').trim();
+        if (aTop + i > 1 && !val.startsWith('@') && /\d{1,2}:\d{2}/.test(val)) { L.lastRide = aTop + i; break; }
+      }
       const top = Math.max(2, L.lastRide - SCAN_ROWS + 1);
-      const end = Math.min(lastRow, L.lastRide + ROSTER_ROWS); // the roster block sits right under the rides
       // Excel on the web refuses answers over ~5 MB, so the rows are read in batches (a few thousand cells each).
+      // We must read: 1) the header (row 1), 2) rides around lastRide, and 3) the bottom of the sheet where
+      // pairings are pasted at dynamic locations.
       const parts = [{ r: 1, n: 1 }];
-      for (let r = top; r <= end; r += BATCH_ROWS) parts.push({ r, n: Math.min(BATCH_ROWS, end - r + 1) });
+      const addRange = (sRow, eRow) => {
+        for (let r = sRow; r <= eRow; r += BATCH_ROWS) parts.push({ r, n: Math.min(BATCH_ROWS, eRow - r + 1) });
+      };
+      const rideEnd = Math.min(lastRow, L.lastRide + 50);
+      const botStart = Math.max(2, lastRow - 350);
+      if (botStart <= rideEnd + 50 || (lastRow - top <= 800)) {
+        addRange(top, lastRow);
+      } else {
+        addRange(top, rideEnd);
+        addRange(botStart, lastRow);
+      }
       const cells = {}; // row -> array of Excel cells {t, v, f, fmt, bg, fc}
       for (const p of parts) {
         const rg = ws.getRangeByIndexes(p.r - 1, 0, p.n, READ_COLS);
@@ -534,7 +548,7 @@
    * panel loaded = a newer build is out: the Restart button says so. (Script Lab pins one build on purpose.)
    */
   const BUILD = SWC.host ? hash(SWC.backend + '\n' + SWC.sidebar + '\n' + SWC.host) : '';
-  const BUILT_AT = '2026-11-19 21:30:05'; // stamped by build.sh
+  const BUILT_AT = '2026-11-19 22:01:40'; // stamped by build.sh
   let newer = false, newerAt = '';
   // What the panel page sees as its "build" (it shows "New version available — Reload" once that changes).
   const shownBuild = () => (newer ? newerAt || 'a newer build' : BUILT_AT);
